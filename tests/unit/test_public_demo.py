@@ -74,6 +74,7 @@ def test_public_demo_assets_are_checked_in_and_scrubbed() -> None:
         "tui-first-run.svg",
         "finding-narrative.svg",
         "transcript.md",
+        "launch-card.png",
     }
     present = {path.name for path in DEMO_ASSETS.iterdir() if path.is_file()}
     transcript = (DEMO_ASSETS / "transcript.md").read_text()

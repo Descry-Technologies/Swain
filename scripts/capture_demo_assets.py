@@ -381,6 +381,28 @@ def _write_launch_card_asset(path: Path) -> None:
         generated_at=datetime(2026, 5, 29, 16, 45, tzinfo=UTC),
     )
     write_launch_card_svg(data, path)
+    _write_png_from_svg(path, path.with_suffix(".png"))
+
+
+def _write_png_from_svg(svg_path: Path, png_path: Path) -> None:
+    convert = shutil.which("convert")
+    if not convert:
+        raise SystemExit(
+            "ImageMagick `convert` is required to generate launch-card.png."
+        )
+    proc = subprocess.run(  # noqa: S603
+        [convert, str(svg_path), str(png_path)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+    if proc.returncode != 0:
+        raise SystemExit(
+            "Could not generate launch-card.png with ImageMagick:\n"
+            f"{proc.stderr.strip()}"
+        )
 
 
 def _seed_demo_history() -> None:

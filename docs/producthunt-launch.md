@@ -18,9 +18,11 @@ Categories:
 - Security
 - AI
 
-Primary CTA: https://github.com/Descry-Technologies/Swain
+Primary CTA: https://descry-technologies.github.io/Swain/launch/
 
-Secondary CTA: README quickstart and demo assets
+Secondary CTA: https://github.com/Descry-Technologies/Swain
+
+Fallback CTA if GitHub Pages is not enabled: README quickstart and demo assets.
 
 ## Launch Story
 
@@ -31,6 +33,7 @@ XSS.
 
 What to emphasize:
 
+- Product Hunt landing page in `docs/launch/index.html`
 - one-command source installer from GitHub
 - `swain update` for source-based updates without PyPI
 - first launch setup for Claude/Codex/hybrid mode, model selection, and scan speed

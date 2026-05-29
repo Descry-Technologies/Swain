@@ -27,6 +27,14 @@ shows:
 - the top finding ID
 - the next review-only fix command
 
+The product landing page lives at `docs/launch/index.html`. The Pages workflow
+deploys `docs/`; after GitHub Pages is enabled for Actions, the launch URL
+becomes:
+
+```text
+https://descry-technologies.github.io/Swain/launch/
+```
+
 ## LinkedIn Post Set
 
 ### Post 1: Build In Public
@@ -97,6 +105,18 @@ Gallery order:
 4. `docs/assets/demo/finding-narrative.svg`
 5. `docs/assets/demo/doctor.svg`
 6. `docs/assets/demo/tui-first-run.svg`
+
+Primary CTA:
+
+```text
+https://descry-technologies.github.io/Swain/launch/
+```
+
+Fallback CTA if GitHub Pages is not enabled:
+
+```text
+https://github.com/Descry-Technologies/Swain
+```
 
 Maker comment structure:
 

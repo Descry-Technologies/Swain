@@ -18,6 +18,9 @@ specific, low-friction, and useful even when Claude or Codex quota is unavailabl
 - Local fallback answers handle "what should I fix first?" and launch-readiness
   questions without needing an LLM call.
 - README explains the first-run TUI flow and the launch-risk surfaces Swain covers.
+- `docs/launch/index.html` provides a Product Hunt/LinkedIn launch page with
+  above-the-fold value proposition, one-command install, demo proof, trust
+  boundary, and Open Graph metadata.
 - Public install is one command: `curl ... | sh`, then `swain` inside a repo.
 - `swain update` refreshes the managed source checkout and reinstalls the command
   without PyPI.

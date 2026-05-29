@@ -21,6 +21,19 @@ Expected:
 - The wheel includes `playbooks/`, `schemas/`, and `examples/launchpad-saas/`.
 - The wheel does not include Python bytecode or `__pycache__/` content.
 
+## Launch Page
+
+- `docs/launch/index.html` renders locally at desktop and mobile widths.
+- The first viewport names Swain, explains the ship/no-ship promise, and shows
+  a product image, not only terminal text.
+- Open Graph and Twitter tags point at `docs/assets/demo/launch-card.png`.
+- The page links to GitHub, the demo flow, and privacy/trust context.
+- `docs/index.html` redirects the Pages root to `/launch/`.
+- `.github/workflows/pages.yml` is present for GitHub Pages deployment from
+  `docs/` after Pages is enabled for GitHub Actions in repository settings.
+- If GitHub Pages is enabled for Actions, the launch URL is
+  `https://descry-technologies.github.io/Swain/launch/`.
+
 Wheel inspection:
 
 ```bash
@@ -134,6 +147,8 @@ Expected assets:
 - `docs/assets/demo/status.svg`
 - `docs/assets/demo/scan-mock.svg`
 - `docs/assets/demo/scan-flow.gif`
+- `docs/assets/demo/launch-card.svg`
+- `docs/assets/demo/launch-card.png`
 - `docs/assets/demo/tui-first-run.svg`
 - `docs/assets/demo/finding-narrative.svg`
 - `docs/assets/demo/transcript.md`
