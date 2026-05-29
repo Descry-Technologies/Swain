@@ -93,8 +93,8 @@ _GREET_NO_PROJECT = [
 _GREET_FIRST_TIME = [
     (
         "Hey. First time with this repo. Run /scan and I'll check the risky "
-        "surfaces first. I'll show each worker call so you can see where time "
-        "and quota go."
+        "surfaces first. I'll show the task-level work and keep worker noise "
+        "behind /scan details."
     ),
     (
         "Hey. I haven't scanned this one yet. Run /scan and I'll start with "
@@ -249,11 +249,11 @@ class AgentVoice:
     def scan_start(self, playbook_count: int) -> str:
         opts = [
             f"Running {playbook_count} check{'s' if playbook_count != 1 else ''}. "
-            "I'll keep the lights on while the workers move.",
+            "I'll keep this at task level: scope, work, warnings, and findings.",
             (
                 f"On it. {playbook_count} "
                 f"check{'s' if playbook_count != 1 else ''} queued. "
-                "Watch the subagents on the side."
+                "I'll show the useful progress and keep raw worker chatter hidden."
             ),
             f"Starting {playbook_count} check{'s' if playbook_count != 1 else ''}. "
             "I'll call out failures instead of letting the scan go quiet.",
@@ -445,6 +445,7 @@ class AgentVoice:
         return (
             "Use me like a security lead sitting next to you:\n"
             "/scan                 audit the repo and save history\n"
+            "/scan details         expand the hidden worker log\n"
             "/status               show what I know and what still needs signal\n"
             "/fix <id>             draft a focused patch for a finding\n"
             "/feedback <id> fp     teach me a false positive\n"

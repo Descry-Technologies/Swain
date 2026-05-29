@@ -57,3 +57,24 @@ def test_sidebar_tracks_scan_subagent_progress() -> None:
 
     assert sidebar.scan_phase == "codex subagent active"
     assert "sast.payments: codex done" in sidebar.subagents
+
+
+def test_scan_progress_hides_waiting_events_and_summarizes_tasks() -> None:
+    agent = _agent()
+
+    assert (
+        agent._visible_scan_line("sast.payments: waiting for codex subagent")
+        is None
+    )
+    line = agent._visible_scan_line("sast.payments: codex reviewing 8 files")
+
+    assert line is not None
+    assert "Payments" in line
+    assert "reviewing 8 files" in line
+
+
+def test_scan_detail_focus_parses_short_command() -> None:
+    agent = _agent()
+
+    assert agent._scan_detail_focus("/scan details auth") == "auth"
+    assert agent._scan_detail_focus("/details payments") == "payments"

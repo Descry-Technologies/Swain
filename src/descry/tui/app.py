@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -86,6 +87,9 @@ class ChatLog(RichLog):
         self.write(f"  [italic #444444]{text}[/]")
 
     def scan_event(self, text: str) -> None:
+        if text.startswith("["):
+            self.write(f"  {text}")
+            return
         if " waiting for " in text:
             self.write(f"  [#777777]queue[/] [#888888]{text}[/]")
         elif " reviewing " in text:
@@ -316,6 +320,8 @@ class SwainAgent:
         # Session conversation history for context-aware responses
         self._session: list[dict[str, str]] = []
         self._last_findings: list = []
+        self._last_scan_events: list[str] = []
+        self._scan_visible_keys: set[str] = set()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -361,6 +367,8 @@ class SwainAgent:
         # Hard commands — no ambiguity
         if cmd in ("/scan", "scan"):
             await self._do_scan()
+        elif cmd.startswith(("/scan details", "scan details", "/details", "details")):
+            await self._do_scan_details(self._scan_detail_focus(text))
         elif cmd.startswith(("/fix ", "fix ")):
             fid = text.split(None, 1)[1].strip() if " " in text else ""
             await self._do_fix(fid)
@@ -462,15 +470,18 @@ Respond with ONLY one of these JSON objects:
                 return
 
         pb_count = self._count_playbooks()
+        self._last_scan_events = []
+        self._scan_visible_keys = set()
         await self._say(self.voice.scan_start(pb_count))
 
         log = self.app.query_one("#chat-log", ChatLog)
         log.system_line(self.voice.thinking())
+        log.system_line(
+            "Showing task overview. Run /scan details to expand the worker log."
+        )
 
         try:
-            result = await asyncio.wait_for(
-                self._run_scan_async(), timeout=300
-            )
+            result = await self._run_scan_async()
         except TimeoutError:
             await self._say(
                 "Scan timed out. Try on a smaller repo or check the workers."
@@ -512,6 +523,52 @@ Respond with ONLY one of these JSON objects:
 
         self._load_memory()
         self._refresh_sidebar()
+
+    async def _do_scan_details(self, focus: str = "") -> None:
+        if not self._last_scan_events:
+            await self._say("No scan detail yet. Run /scan first.")
+            return
+
+        focus_lower = focus.lower()
+        general: list[str] = []
+        grouped: dict[str, list[str]] = {}
+        order: list[str] = []
+        for event in self._last_scan_events:
+            playbook, _ = self._split_playbook_event(event)
+            if playbook:
+                if playbook not in grouped:
+                    grouped[playbook] = []
+                    order.append(playbook)
+                grouped[playbook].append(event)
+            else:
+                general.append(event)
+
+        lines = ["Hidden worker log from the last scan."]
+        if focus:
+            lines[0] += f" Filter: {focus}"
+        lines.append("")
+        if general and not focus:
+            lines.append("Scan setup")
+            lines.extend(f"- {event}" for event in general[:12])
+
+        matched = 0
+        for playbook in order:
+            label = self._playbook_label(playbook)
+            haystack = f"{playbook} {label}".lower()
+            if focus_lower and focus_lower not in haystack:
+                continue
+            matched += 1
+            lines.append("")
+            lines.append(f"{label} ({playbook})")
+            lines.extend(f"- {event}" for event in grouped[playbook])
+
+        if focus and matched == 0:
+            lines.append("No matching playbook. Try /scan details auth.")
+        elif not focus:
+            lines.append("")
+            lines.append("Tip: use /scan details auth or /scan details payments.")
+
+        await self._stream("\n".join(lines))
 
     async def _do_fix(self, finding_id: str) -> None:
         if not finding_id:
@@ -644,9 +701,160 @@ Respond with ONLY one of these JSON objects:
         log.write("")
 
     def _scan_event(self, text: str) -> None:
-        log = self.app.query_one("#chat-log", ChatLog)
-        log.scan_event(text)
+        self._last_scan_events.append(text)
         self.app.record_scan_event(text)
+        visible = self._visible_scan_line(text)
+        if not visible:
+            return
+        log = self.app.query_one("#chat-log", ChatLog)
+        log.scan_event(visible)
+
+    def _visible_scan_line(self, text: str) -> str | None:
+        if text.startswith("indexing repo"):
+            return self._once("stage:index", "[#777777]prep[/] mapping the repo")
+        if text.startswith("repo profile:"):
+            return self._once(
+                "stage:profile",
+                f"[#777777]scope[/] "
+                f"{escape(text.removeprefix('repo profile:').strip())}",
+            )
+        if text.startswith("running local secret sweep"):
+            return self._once(
+                "stage:secrets",
+                "[#777777]local[/] checking for obvious secrets first",
+            )
+        if text.startswith("local secret sweep returned"):
+            return (
+                f"[#2fdd92]done[/] "
+                f"{escape(text.replace('local secret sweep ', ''))}"
+            )
+        if text.startswith("worker setup:"):
+            return self._once(
+                "stage:workers",
+                f"[#777777]workers[/] "
+                f"{escape(text.removeprefix('worker setup:').strip())}",
+            )
+        if text.startswith("planned "):
+            return self._once("stage:planned", f"[#777777]plan[/] {escape(text)}")
+        if text.startswith("queue:"):
+            return self._once(
+                "stage:queue",
+                f"[#777777]checks[/] {escape(self._compact_queue(text))}",
+            )
+        if text.startswith("model workers can spend"):
+            return self._once(
+                "stage:detail-hint",
+                "[#777777]detail[/] worker chatter is hidden; "
+                "/scan details expands it",
+            )
+        if text.startswith("mission "):
+            return None
+        if text.startswith("warning:"):
+            return self._visible_warning(text)
+
+        playbook, rest = self._split_playbook_event(text)
+        if not playbook or not rest:
+            return None
+        label = self._playbook_label(playbook)
+        if rest.startswith("starting with "):
+            count = rest.removeprefix("starting with ").split(" file", 1)[0]
+            return self._once(
+                f"task:{playbook}:queued",
+                f"[#888888]-[/] {escape(label)} queued ({escape(count)} files)",
+            )
+        if " reviewing " in rest:
+            worker, file_part = rest.split(" reviewing ", 1)
+            count = file_part.split(" file", 1)[0]
+            return self._once(
+                f"task:{playbook}:{worker}:reviewing",
+                f"[bold #00d4aa]work[/] {escape(label)}: "
+                f"{escape(worker)} reviewing {escape(count)} files",
+            )
+        if " returned " in rest:
+            worker, finding_part = rest.split(" returned ", 1)
+            count = finding_part.split(" finding", 1)[0]
+            return (
+                f"[#2fdd92]done[/] {escape(label)}: {escape(worker)} "
+                f"returned {escape(count)} findings"
+            )
+        if " failed - " in rest:
+            worker, reason = rest.split(" failed - ", 1)
+            return (
+                f"[#f0b429]warn[/] {escape(label)}: {escape(worker)} "
+                f"{escape(self._clean_worker_reason(reason))}"
+            )
+        if rest.startswith("disabled ") and " for this scan" in rest:
+            return f"[#f0b429]warn[/] {escape(rest)}"
+        if rest.startswith("no ") and " worker available" in rest:
+            return f"[#f0b429]warn[/] {escape(label)}: {escape(rest)}"
+        return None
+
+    def _visible_warning(self, text: str) -> str | None:
+        warning = text.removeprefix("warning:").strip()
+        playbook = warning.split(" ", 1)[0] if warning else ""
+        label = self._playbook_label(playbook) if "." in playbook else ""
+        if "retrying with reduced file scope" in warning and label:
+            return (
+                f"[#f0b429]retry[/] {escape(label)}: smaller file set after "
+                "unparsable output"
+            )
+        return None
+
+    def _once(self, key: str, line: str) -> str | None:
+        if key in self._scan_visible_keys:
+            return None
+        self._scan_visible_keys.add(key)
+        return line
+
+    def _compact_queue(self, text: str) -> str:
+        raw = text.removeprefix("queue:").strip()
+        if not raw or raw == "empty":
+            return "no model checks queued"
+        labels = [self._playbook_label(item.strip()) for item in raw.split(",")]
+        if len(labels) <= 5:
+            return ", ".join(labels)
+        return ", ".join(labels[:5]) + f", +{len(labels) - 5} more"
+
+    def _split_playbook_event(self, text: str) -> tuple[str, str]:
+        if ":" not in text:
+            return "", ""
+        playbook, rest = text.split(":", 1)
+        playbook = playbook.strip()
+        if not playbook.startswith(("sast.", "secrets.")):
+            return "", ""
+        return playbook, rest.strip()
+
+    def _playbook_label(self, playbook: str) -> str:
+        labels = {
+            "secrets.scan": "Secrets",
+            "sast.auth.python": "Auth",
+            "sast.file-upload": "Uploads",
+            "sast.payments": "Payments",
+            "sast.sql-injection": "SQL injection",
+            "sast.tenant-isolation": "Tenant isolation",
+            "sast.xss.react": "React XSS",
+        }
+        return labels.get(
+            playbook,
+            playbook.removeprefix("sast.").replace(".", " ").replace("-", " ").title(),
+        )
+
+    def _clean_worker_reason(self, reason: str) -> str:
+        reason = reason.strip().rstrip(".")
+        if reason == "timed out":
+            return "timed out"
+        if "could not parse" in reason or "parse" in reason:
+            return "returned output I could not read as findings"
+        if reason.startswith("exit "):
+            return reason
+        return reason[:100]
+
+    def _scan_detail_focus(self, text: str) -> str:
+        lowered = text.lower()
+        for prefix in ("/scan details", "scan details", "/details", "details"):
+            if lowered.startswith(prefix):
+                return text[len(prefix):].strip()
+        return ""
 
     async def _stream(self, text: str) -> None:
         """Write agent message with typewriter effect."""

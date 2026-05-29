@@ -23,6 +23,29 @@ class DummyWorker(BaseWorker):
         return ["echo", "{}"]
 
 
+class TimeoutWorker(BaseWorker):
+    worker_type = WorkerType.CODEX
+
+    def is_available(self) -> bool:
+        return True
+
+    async def _build_command(self, prompt: str, worktree: Path) -> list[str]:
+        return ["echo", "{}"]
+
+    async def run(
+        self,
+        task_id: str,
+        prompt: str,
+        files: list[Path],
+        repo_root: Path,
+        *,
+        playbook_id: str = "",
+        playbook_version: int = 1,
+        timeout_s: int | None = None,
+    ) -> WorkerResult:
+        return WorkerResult(report=None, timed_out=True, exit_code=-1)
+
+
 def test_extract_json_prefers_report_object_from_noisy_codex_output() -> None:
     worker = DummyWorker()
     output = """
@@ -226,3 +249,60 @@ async def test_worker_pool_emits_worker_progress_events(tmp_path: Path) -> None:
     assert any("waiting for claude subagent" in event for event in events)
     assert any("claude reviewing 0 files" in event for event in events)
     assert any("claude returned 0 findings" in event for event in events)
+
+
+@pytest.mark.asyncio
+async def test_worker_pool_does_not_mock_fallback_for_real_scans(
+    tmp_path: Path,
+) -> None:
+    pool = WorkerPool()
+    task = Task(
+        id="task-1",
+        playbook_id="sast.xss.react",
+        worker=WorkerType.CLAUDE,
+        files=[],
+    )
+    events: list[str] = []
+
+    result = await pool.run_task(
+        task,
+        "Return JSON",
+        [],
+        tmp_path,
+        on_event=events.append,
+    )
+
+    assert result.report is None
+    assert result.exit_code == 127
+    assert "No available claude worker" in result.parse_error
+    assert any("no claude worker available" in event for event in events)
+    assert not any("mock fallback" in event for event in events)
+
+
+@pytest.mark.asyncio
+async def test_worker_pool_pauses_worker_after_repeated_timeouts(
+    tmp_path: Path,
+) -> None:
+    pool = WorkerPool()
+    pool.register(TimeoutWorker())
+    task = Task(
+        id="task-1",
+        playbook_id="sast.xss.react",
+        worker=WorkerType.CODEX,
+        files=[],
+    )
+    events: list[str] = []
+
+    await pool.run_task(task, "Return JSON", [], tmp_path, on_event=events.append)
+    await pool.run_task(task, "Return JSON", [], tmp_path, on_event=events.append)
+    result = await pool.run_task(
+        task,
+        "Return JSON",
+        [],
+        tmp_path,
+        on_event=events.append,
+    )
+
+    assert result.report is None
+    assert "No available codex worker" in result.parse_error
+    assert any("disabled codex for this scan after 2 timeouts" in e for e in events)

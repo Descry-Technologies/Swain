@@ -100,9 +100,15 @@ class Executor:
                             on_event=on_event,
                         )
                     elif result.parse_error:
+                        warning = (
+                            f"{task.playbook_id} {result.parse_error}"
+                            if result.exit_code == 127
+                            and result.parse_error.startswith("No available")
+                            else f"{task.playbook_id} returned "
+                            "unparsable worker output"
+                        )
                         self._record_warning(
-                            f"{task.playbook_id} parse error: "
-                            f"{result.parse_error[:120]}",
+                            warning,
                             on_event=on_event,
                         )
                     else:
@@ -142,8 +148,10 @@ class Executor:
             on_event=on_event,
         )
 
-        # Retry once with half the files if failed.
-        if result.report is None and len(task.files) > 1:
+        # Retry once with half the files only when the worker returned quickly
+        # but produced unusable output. Timeouts and auth/quota failures can burn
+        # a user's CLI allowance twice without improving the result.
+        if self._should_retry_with_reduced_scope(result, task):
             retry_task = task.model_copy(
                 update={"files": task.files[: max(1, len(task.files) // 2)]},
             )
@@ -163,11 +171,24 @@ class Executor:
             )
         return result
 
+    def _should_retry_with_reduced_scope(
+        self,
+        result: WorkerResult,
+        task: Task,
+    ) -> bool:
+        if result.report is not None or len(task.files) <= 1:
+            return False
+        if result.timed_out or result.exit_code != 0:
+            return False
+        return bool(result.parse_error)
+
     def _result_reason(self, result: WorkerResult) -> str:
         if result.timed_out:
             return "timeout"
+        if result.exit_code == 127 and result.parse_error.startswith("No available"):
+            return result.parse_error
         if result.parse_error:
-            return f"parse error: {result.parse_error[:100]}"
+            return "unparsable worker output"
         if result.exit_code != 0:
             return f"exit code {result.exit_code}"
         return "empty worker report"

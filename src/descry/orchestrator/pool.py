@@ -16,6 +16,7 @@ class WorkerPool:
         self._max_per_type = max_per_type
         self._workers: dict[WorkerType, BaseWorker] = {}
         self._disabled_workers: set[WorkerType] = set()
+        self._timeout_strikes: dict[WorkerType, int] = {}
 
     def register(self, worker: BaseWorker) -> None:
         self._workers[worker.worker_type] = worker
@@ -41,14 +42,16 @@ class WorkerPool:
                     on_event(f"{task.playbook_id}: using mock worker")
                 workers = [mock_worker]
             else:
-                from descry.workers.mock_worker import MockWorker
-
                 if on_event:
                     on_event(
                         f"{task.playbook_id}: no {task.worker.value} worker "
-                        "available; using mock fallback"
+                        "available"
                     )
-                workers = [MockWorker()]
+                return WorkerResult(
+                    report=None,
+                    exit_code=127,
+                    parse_error=f"No available {task.worker.value} worker",
+                )
 
         last_result: WorkerResult | None = None
         for worker in workers:
@@ -101,6 +104,17 @@ class WorkerPool:
                         f"{task.playbook_id}: disabled {worker.worker_type.value} "
                         "for this scan after an auth/quota diagnostic"
                     )
+            elif result.timed_out:
+                strikes = self._timeout_strikes.get(worker.worker_type, 0) + 1
+                self._timeout_strikes[worker.worker_type] = strikes
+                if strikes >= 2:
+                    self._disabled_workers.add(worker.worker_type)
+                    if on_event:
+                        on_event(
+                            f"{task.playbook_id}: disabled "
+                            f"{worker.worker_type.value} for this scan after "
+                            f"{strikes} timeouts"
+                        )
             if not self._should_try_fallback(result):
                 break
 
@@ -116,7 +130,7 @@ class WorkerPool:
         if result.timed_out:
             return "timed out"
         if result.parse_error:
-            return result.parse_error[:160]
+            return "returned output Swain could not parse"
         if result.exit_code != 0:
             diagnostic = (result.stderr or "").strip().splitlines()
             suffix = f": {diagnostic[0][:120]}" if diagnostic else ""
