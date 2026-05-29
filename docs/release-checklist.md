@@ -53,6 +53,7 @@ Expected:
 
 - `swain demo` runs doctor, status, and a mock scan without Claude/Codex quota.
 - The final handoff says to open the TUI with `swain <demo-path>`.
+- The installer handoff says to run `swain` inside a project, not `uv run`.
 
 ## CLI Smoke
 
@@ -62,6 +63,7 @@ dir so local history does not dirty the working tree:
 ```bash
 tmp=$(mktemp -d)
 cp -R examples/launchpad-saas "$tmp/launchpad-saas"
+uv run swain setup "$tmp/launchpad-saas" --yes --no-profile
 uv run swain doctor "$tmp/launchpad-saas" --no-probe-workers
 uv run swain status "$tmp/launchpad-saas"
 uv run swain scan "$tmp/launchpad-saas" --output markdown --mock
@@ -69,6 +71,8 @@ uv run swain scan "$tmp/launchpad-saas" --output markdown --mock
 
 Expected:
 
+- `setup` records worker mode, model defaults, and careful scan concurrency in
+  `.swain/config.yaml`.
 - `doctor` reports repo/profile/playbook/package checks and worker locations.
 - `status` renders recent runs, ranks open findings, and prints a fix-first
   command when finding history exists.
@@ -101,6 +105,7 @@ uv run swain /path/to/app
 
 Expected:
 
+- If `.swain/config.yaml` is missing, first launch runs setup before the TUI.
 - First-run greeting explains the next action.
 - Asking `are we ready to ship?` gives a local launch-readiness answer.
 - `/scan` shows progress, finding narratives, a prioritization opinion, and a

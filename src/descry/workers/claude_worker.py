@@ -48,9 +48,8 @@ class ClaudeWorker(BaseWorker):
             "Read,Grep,Glob",
             "--output-format",
             "text",
-            "-p",
-            full_prompt,
         ]
         if self.model:
             cmd += ["--model", self.model]
+        cmd += ["-p", full_prompt]
         return cmd

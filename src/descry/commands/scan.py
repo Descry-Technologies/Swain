@@ -11,6 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from descry.memory.calibration import CalibrationStore
+from descry.memory.config import SwainConfig
 from descry.memory.conventions import ConventionStore
 from descry.memory.profile import ProjectProfile
 from descry.memory.scheduler import ScheduleStore
@@ -18,14 +19,11 @@ from descry.memory.store import MemoryStore
 from descry.models import Finding, Severity
 from descry.orchestrator.executor import Executor
 from descry.orchestrator.planner import Planner
-from descry.orchestrator.pool import WorkerPool
 from descry.playbooks.loader import PlaybookLoader
 from descry.resources import builtin_playbooks_dir
 from descry.scanners.inventory import RepoInventory
 from descry.scanners.secrets import SecretsScanner
-from descry.workers.claude_worker import ClaudeWorker
-from descry.workers.codex_worker import CodexWorker
-from descry.workers.mock_worker import MockWorker
+from descry.workers.configured_pool import build_worker_pool
 
 console = Console()
 
@@ -36,6 +34,10 @@ SEVERITY_COLOR = {
     Severity.LOW: "cyan",
     Severity.INFO: "dim",
 }
+
+
+def _terminal_event(text: str) -> None:
+    console.print(f"[dim]  - {text}[/dim]")
 
 
 async def run_scan(
@@ -49,7 +51,7 @@ async def run_scan(
     if not profile_path.exists():
         console.print(
             "[yellow]No .swain/profile.yaml found. "
-            "Run [bold]swain init[/bold] first.[/yellow]"
+            "Run [bold]swain setup[/bold] first.[/yellow]"
         )
         return
 
@@ -72,15 +74,14 @@ async def run_scan(
             "detected by static scan![/bold red]"
         )
 
-    # Build worker pool
-    pool = WorkerPool(max_concurrent=4, max_per_type=4)
-    if mock:
-        pool.register(MockWorker())
-    else:
-        pool.register(ClaudeWorker())
-        pool.register(CodexWorker())
-        if not MockWorker().is_available():
-            pool.register(MockWorker())  # always have fallback
+    # Build worker pool from first-run setup.
+    config = SwainConfig.load(store)
+    if output == "terminal":
+        if mock:
+            console.print("[dim]Worker mode: mock offline demo[/dim]")
+        else:
+            console.print(f"[dim]Worker mode: {config.worker_summary()}[/dim]")
+    pool = build_worker_pool(config, mock=mock)
 
     # Load playbooks
     user_pb_dir = store.root / "playbooks"
@@ -108,9 +109,11 @@ async def run_scan(
 
     # Execute
     executor = Executor(pool, loader, profile, conventions, calibration, repo_root)
+    progress_event = _terminal_event if output == "terminal" else None
     findings = await executor.execute(
         mission,
         on_finding=on_finding if output == "terminal" else None,
+        on_event=progress_event,
     )
     task_warnings = executor.task_warnings
 

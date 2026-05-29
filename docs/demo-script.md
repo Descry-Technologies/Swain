@@ -11,8 +11,13 @@ tenant data, SQL, and XSS risk. Release assets should use only this public demo.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Descry-Technologies/Swain/main/install.sh | sh
+cd /path/to/your/repo
+swain
 swain demo
 ```
+
+Say: "The normal path is install, cd into your repo, type `swain`, and answer
+setup. The demo path stays offline so nobody spends quota while evaluating."
 
 ## Flow
 

@@ -6,7 +6,8 @@ specific, low-friction, and useful even when Claude or Codex quota is unavailabl
 
 ## Current Experience Bar
 
-- First-run chat explains what `/scan` will do before asking the user to trust it.
+- First launch runs setup before the TUI, explains what Swain reads/writes, and
+  lets the user choose Claude CLI, Codex CLI, or hybrid mode.
 - Findings include a short ID so `/fix <id>` and `/feedback <id> fp` are obvious.
 - Scan summaries include a next step, not just a pass/fail result.
 - `swain status` ranks the latest open findings, names the fix-first item, and
@@ -14,7 +15,7 @@ specific, low-friction, and useful even when Claude or Codex quota is unavailabl
 - Local fallback answers handle "what should I fix first?" and launch-readiness
   questions without needing an LLM call.
 - README explains the first-run TUI flow and the launch-risk surfaces Swain covers.
-- Public install is one command: `curl ... | sh`, then `swain demo`.
+- Public install is one command: `curl ... | sh`, then `swain` inside a repo.
 - `swain doctor` gives a preflight view of repo setup, playbooks, worker
   availability, quota/auth probes, and package hygiene.
 - Generated Python bytecode is ignored and no longer tracked as package content.
@@ -25,8 +26,7 @@ specific, low-friction, and useful even when Claude or Codex quota is unavailabl
 - Wheel packaging includes bundled playbooks, schemas, and the public demo, so
   installed scans can load the same checks and demo as the source checkout.
 - First-run Textual smoke coverage verifies the TUI mounts, greets a fresh repo,
-  answers launch-readiness locally, and does not create `.swain/` before the
-  user scans or initializes.
+  and answers launch-readiness locally.
 - A release demo script exists for the preflight, first-run chat, scan,
   fix-draft, and feedback loop.
 - A release checklist captures automated gates, CLI smoke checks, real-worker
@@ -52,9 +52,9 @@ specific, low-friction, and useful even when Claude or Codex quota is unavailabl
 
 ## Market-Ready Gates
 
-- Onboarding: a new user can install with one shell command, run `swain demo`,
-  then run `swain /path/to/repo`, scan, and know what to do next without reading
-  source code.
+- Onboarding: a new user can install with one shell command, run `swain` inside
+  a repo, complete setup, scan, and know what to do next without reading source
+  code. `swain demo` remains available as the no-quota proof path.
 - Reliability: scans degrade gracefully when Claude is out of quota by using Codex
   fallback or clear diagnostic messages.
 - Preflight: users can run `swain doctor` before a scan and get clear next steps

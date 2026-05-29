@@ -32,6 +32,7 @@ XSS.
 What to emphasize:
 
 - one-command source installer from GitHub
+- first launch setup for Claude/Codex/hybrid mode, model selection, and scan speed
 - uses Claude/Codex CLIs builders may already pay for
 - focused on practical launch risks, not broad compliance
 - `status` gives a fix-first recommendation
@@ -60,7 +61,7 @@ Swain is a local AI security lead for that moment.
 
 It runs from your repo, uses your existing Claude/Codex CLIs, scans the risky product surfaces first, and tells you what to fix before launch. It also drafts reviewable patches and learns from false-positive feedback.
 
-For v1, the install path is one curl command from GitHub. The public demo app is intentionally vulnerable, so you can see the full loop with `swain demo` before exposing private code.
+For v1, the install path is one curl command from GitHub, then `swain` inside your repo. First launch explains what Swain reads/writes and lets you choose Claude, Codex, or hybrid mode before a real scan. The public demo app is intentionally vulnerable, so you can see the full loop with `swain demo` before exposing private code.
 
 Would love feedback from solo builders shipping real apps fast.
 ```

@@ -8,10 +8,12 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from descry.memory.config import SwainConfig
 from descry.playbooks.loader import PlaybookLoader
 from descry.resources import builtin_playbooks_dir
 from descry.scanners.inventory import RepoInventory
@@ -40,6 +42,7 @@ async def collect_checks(
 ) -> list[DoctorCheck]:
     checks = [
         _check_repo(repo_root),
+        _check_setup(repo_root),
         _check_profile(repo_root),
         _check_playbooks(repo_root),
         _check_generated_artifacts(repo_root),
@@ -66,6 +69,35 @@ def _check_repo(repo_root: Path) -> DoctorCheck:
     return DoctorCheck("repo", "ok", str(repo_root.resolve()))
 
 
+def _check_setup(repo_root: Path) -> DoctorCheck:
+    config_path = repo_root / ".swain" / "config.yaml"
+    if not config_path.exists():
+        return DoctorCheck(
+            "setup",
+            "warn",
+            "No .swain/config.yaml yet",
+            "Run `swain setup` to choose Claude/Codex workers and model settings.",
+        )
+    try:
+        data = yaml.safe_load(config_path.read_text()) or {}
+        config = SwainConfig.from_dict(data)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        return DoctorCheck(
+            "setup",
+            "error",
+            f"Invalid .swain/config.yaml: {exc}",
+            "Run `swain setup` again.",
+        )
+    if not config.setup_completed:
+        return DoctorCheck(
+            "setup",
+            "warn",
+            ".swain/config.yaml exists but setup is incomplete",
+            "Run `swain setup` again.",
+        )
+    return DoctorCheck("setup", "ok", config.worker_summary())
+
+
 def _check_profile(repo_root: Path) -> DoctorCheck:
     profile_path = repo_root / ".swain" / "profile.yaml"
     if profile_path.exists():
@@ -74,7 +106,7 @@ def _check_profile(repo_root: Path) -> DoctorCheck:
         "profile",
         "warn",
         "No .swain/profile.yaml yet",
-        "Run `swain init` or start with `/scan` in the TUI.",
+        "Run `swain setup` or start with `/scan` in the TUI.",
     )
 
 

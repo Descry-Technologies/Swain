@@ -1,0 +1,11 @@
+setup:
+  completed: true
+workers:
+  mode: hybrid
+  concurrency: careful
+  max_concurrent: 1
+  max_per_type: 1
+  claude:
+    model: ''
+  codex:
+    model: ''

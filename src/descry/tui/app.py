@@ -291,6 +291,8 @@ class SwainAgent:
             await self._do_status()
         elif cmd in ("/init", "init"):
             await self._do_init()
+        elif cmd in ("/setup", "setup"):
+            await self._do_setup()
         elif cmd in ("help", "/help"):
             await self._do_help()
         else:
@@ -496,6 +498,13 @@ Respond with ONLY one of these JSON objects:
         except Exception as e:
             await self._say(f"Init failed: {e}")
 
+    async def _do_setup(self) -> None:
+        await self._say(
+            "Setup runs in the terminal because it asks interactive questions "
+            "about Claude, Codex, models, and scan speed.\n\n"
+            f"Run:\n  swain setup {self.repo_path}"
+        )
+
     async def _do_explain(self, topic: str) -> None:
         """Use claude to explain a security topic in plain English."""
         if not shutil.which("claude"):
@@ -673,21 +682,20 @@ Respond with ONLY one of these JSON objects:
     async def _run_scan_async(self) -> ScanRunResult:
         from descry.commands.scan import _save_history
         from descry.memory.calibration import CalibrationStore
+        from descry.memory.config import SwainConfig
         from descry.memory.conventions import ConventionStore
         from descry.memory.profile import ProjectProfile
         from descry.memory.scheduler import ScheduleStore
         from descry.memory.store import MemoryStore
         from descry.orchestrator.executor import Executor
         from descry.orchestrator.planner import Planner
-        from descry.orchestrator.pool import WorkerPool
         from descry.playbooks.loader import PlaybookLoader
         from descry.scanners.inventory import RepoInventory
         from descry.scanners.secrets import SecretsScanner
-        from descry.workers.claude_worker import ClaudeWorker
-        from descry.workers.codex_worker import CodexWorker
-        from descry.workers.mock_worker import MockWorker
+        from descry.workers.configured_pool import build_worker_pool
 
         store = MemoryStore(self.repo_path)
+        config = SwainConfig.load(store)
         profile = ProjectProfile.load(store)
         conventions = ConventionStore(store)
         calibration = CalibrationStore(store)
@@ -705,11 +713,8 @@ Respond with ONLY one of these JSON objects:
             f"local secret sweep returned {len(secrets)} hit"
             f"{'s' if len(secrets) != 1 else ''}"
         )
-
-        pool = WorkerPool(max_concurrent=4, max_per_type=2)
-        pool.register(ClaudeWorker())
-        pool.register(CodexWorker())
-        pool.register(MockWorker())
+        self._scan_event(f"worker setup: {config.worker_summary()}")
+        pool = build_worker_pool(config)
 
         loader = PlaybookLoader(
             builtin_dir=builtin_playbooks_dir(),

@@ -5,4 +5,10 @@ from descry.workers.claude_worker import ClaudeWorker
 from descry.workers.codex_worker import CodexWorker
 from descry.workers.mock_worker import MockWorker
 
-__all__ = ["BaseWorker", "WorkerResult", "ClaudeWorker", "CodexWorker", "MockWorker"]
+__all__ = [
+    "BaseWorker",
+    "WorkerResult",
+    "ClaudeWorker",
+    "CodexWorker",
+    "MockWorker",
+]

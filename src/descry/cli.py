@@ -25,6 +25,7 @@ _COMMAND_NAMES = {
     "status",
     "doctor",
     "demo",
+    "setup",
     "version",
 }
 
@@ -48,7 +49,9 @@ def main() -> None:
         ):
             from descry.tui.app import SwainApp
 
-            SwainApp(repo_path=_get_repo_root(first_arg)).run()
+            repo = _get_repo_root(first_arg)
+            _maybe_run_first_launch_setup(repo)
+            SwainApp(repo_path=repo).run()
             return
     app()
 
@@ -61,7 +64,25 @@ def default(ctx: typer.Context) -> None:
     from descry.tui.app import SwainApp
 
     repo = _get_repo_root(None)
+    _maybe_run_first_launch_setup(repo)
     SwainApp(repo_path=repo).run()
+
+
+def _maybe_run_first_launch_setup(repo: Path) -> None:
+    from descry.commands.setup import run_setup, setup_completed
+
+    if setup_completed(repo):
+        return
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        rprint(
+            "[yellow]Swain setup has not run for this repo yet. "
+            f"Run `swain setup {repo}` before opening the TUI.[/yellow]"
+        )
+        return
+    try:
+        asyncio.run(run_setup(repo))
+    except KeyboardInterrupt:
+        raise typer.Exit(130) from None
 
 
 @app.command()
@@ -113,6 +134,61 @@ def scan(
             mock=mock,
         )
     )
+
+
+@app.command()
+def setup(
+    path: str = typer.Argument(None, help="Repo path (defaults to current directory)"),
+    mode: str = typer.Option(
+        None,
+        "--mode",
+        help="Worker mode: hybrid, claude, or codex",
+    ),
+    claude_model: str = typer.Option(
+        None,
+        "--claude-model",
+        help="Claude model id, or 'default' for the Claude CLI default",
+    ),
+    codex_model: str = typer.Option(
+        None,
+        "--codex-model",
+        help="Codex model id, or 'default' for the Codex CLI default",
+    ),
+    speed: str = typer.Option(
+        None,
+        "--speed",
+        help="Scan speed: careful, balanced, or fast",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Use defaults for unanswered setup choices",
+    ),
+    no_profile: bool = typer.Option(
+        False,
+        "--no-profile",
+        help="Do not build the local project profile during setup",
+    ),
+) -> None:
+    """Explain Swain and configure Claude/Codex workers for this repo."""
+    from descry.commands.setup import run_setup
+
+    try:
+        asyncio.run(
+            run_setup(
+                _get_repo_root(path),
+                worker_mode=mode,
+                claude_model=claude_model,
+                codex_model=codex_model,
+                concurrency=speed,
+                interactive=not yes,
+                init_profile=not no_profile,
+            )
+        )
+    except ValueError as exc:
+        typer.echo(f"Setup failed: {exc}", err=True)
+        raise typer.Exit(1) from None
 
 
 @app.command()

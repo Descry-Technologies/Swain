@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from descry.commands.history import lookup_finding
+from descry.memory.config import SwainConfig
 from descry.memory.store import MemoryStore
 from descry.workers.codex_worker import CodexWorker
 
@@ -27,7 +28,8 @@ async def run_fix(repo_root: Path, finding_id: str) -> None:
         console.print("[red]No existing repository file found for this finding.[/red]")
         return
 
-    worker = CodexWorker()
+    config = SwainConfig.load(store)
+    worker = CodexWorker(model=config.codex_model or None)
     if not worker.is_available():
         console.print(
             "[red]codex CLI not found. Install/authenticate Codex CLI to "

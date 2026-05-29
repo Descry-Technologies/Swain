@@ -35,14 +35,20 @@ class WorkerPool:
     ) -> WorkerResult:
         workers = self._candidate_workers(task.worker)
         if not workers:
-            from descry.workers.mock_worker import MockWorker
+            mock_worker = self._workers.get(WorkerType.MOCK)
+            if mock_worker and mock_worker.is_available():
+                if on_event:
+                    on_event(f"{task.playbook_id}: using mock worker")
+                workers = [mock_worker]
+            else:
+                from descry.workers.mock_worker import MockWorker
 
-            if on_event:
-                on_event(
-                    f"{task.playbook_id}: no {task.worker.value} worker available; "
-                    "using mock fallback"
-                )
-            workers = [MockWorker()]
+                if on_event:
+                    on_event(
+                        f"{task.playbook_id}: no {task.worker.value} worker "
+                        "available; using mock fallback"
+                    )
+                workers = [MockWorker()]
 
         last_result: WorkerResult | None = None
         for worker in workers:

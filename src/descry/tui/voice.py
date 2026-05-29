@@ -445,6 +445,7 @@ class AgentVoice:
             "/fix <id>             draft a focused patch for a finding\n"
             "/feedback <id> fp     teach me a false positive\n"
             "/feedback <id> fix    mark something fixed\n"
+            "/setup                change Claude/Codex model setup\n"
             "/init                 rebuild the project profile\n\n"
             "You can also ask plain-English questions like 'what should I fix first?' "
             "or 'explain this auth issue'."

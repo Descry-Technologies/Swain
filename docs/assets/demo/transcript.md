@@ -13,16 +13,18 @@ swain doctor examples/launchpad-saas --no-probe-workers
 ╭──────────────╮
 │ Swain Doctor │
 ╰─ ~─╯
-┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Check              ┃ Status   ┃ Detail                                                ┃ Next step                                               ┃
-┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ repo               │ ok       │ <swain>/examples/launchpad-saas │                                                         │
-│ profile            │ ok       │ .swain/profile.yaml found                             │                                                         │
-│ playbooks          │ ok       │ 7 applicable of 7 loaded                              │                                                         │
-│ package hygiene    │ ok       │ no tracked Python bytecode                            │                                                         │
-│ claude             │ ok       │ ~/.local/bin/claude found; probe skipped    │ Run `swain doctor --probe-workers` to check auth/quota. │
-│ codex              │ ok       │ /usr/bin/codex found; probe skipped                   │ Run `swain doctor --probe-workers` to check auth/quota. │
-└────────────────────┴──────────┴───────────────────────────────────────────────────────┴─────────────────────────────────────────────────────────┘
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Check              ┃ Status   ┃ Detail                                                             ┃ Next step                                               ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ repo               │ ok       │ <swain>/examples/launchpad-saas              │                                                         │
+│ setup              │ ok       │ hybrid (Claude: CLI default, Codex: CLI default); careful          │                                                         │
+│                    │          │ concurrency, max 1 at once                                         │                                                         │
+│ profile            │ ok       │ .swain/profile.yaml found                                          │                                                         │
+│ playbooks          │ ok       │ 7 applicable of 7 loaded                                           │                                                         │
+│ package hygiene    │ ok       │ no tracked Python bytecode                                         │                                                         │
+│ claude             │ ok       │ ~/.local/bin/claude found; probe skipped                 │ Run `swain doctor --probe-workers` to check auth/quota. │
+│ codex              │ ok       │ /usr/bin/codex found; probe skipped                                │ Run `swain doctor --probe-workers` to check auth/quota. │
+└────────────────────┴──────────┴────────────────────────────────────────────────────────────────────┴─────────────────────────────────────────────────────────┘
 
 Ready to scan.
 ```

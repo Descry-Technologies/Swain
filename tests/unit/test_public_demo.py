@@ -27,9 +27,12 @@ class NoSchedule:
 
 
 def test_public_demo_repo_is_initialized_for_screenshots() -> None:
+    config_data = yaml.safe_load((DEMO_REPO / ".swain/config.yaml").read_text())
     profile_data = yaml.safe_load((DEMO_REPO / ".swain/profile.yaml").read_text())
     profile = ProjectProfile(**profile_data)
 
+    assert config_data["setup"]["completed"] is True
+    assert config_data["workers"]["mode"] == "hybrid"
     assert profile.repo_name == "launchpad-saas"
     assert {"react", "fastapi", "stripe"}.issubset(set(profile.frameworks))
     assert profile.has_auth is True

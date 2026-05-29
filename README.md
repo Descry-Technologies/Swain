@@ -14,19 +14,30 @@ Install once, then run `swain` from any terminal:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Descry-Technologies/Swain/main/install.sh | sh
-swain demo
+cd /path/to/your/repo
+swain
 ```
 
 The installer clones Swain's source into `~/.swain/source`, installs the
-`swain` command, and keeps `uv` hidden as an implementation detail. `swain demo`
-runs the public offline demo and does not spend Claude/Codex quota.
+`swain` command, and keeps `uv` hidden as an implementation detail. The first
+`swain` launch explains what Swain reads and writes, then asks whether scans
+should use Claude CLI, Codex CLI, or hybrid mode. It also lets you choose CLI
+default models or exact model ids, and a scan speed so quota use is explicit.
+Setup builds a local project profile without spending model quota.
 
-For a real repo:
+From outside the repo:
 
 ```bash
-swain doctor /path/to/your/repo
 swain /path/to/your/repo
 ```
+
+For the offline demo:
+
+```bash
+swain demo
+```
+
+`swain demo` does not spend Claude/Codex quota.
 
 `doctor` checks repo setup, bundled playbooks, local package hygiene, and your
 Claude/Codex CLIs. If a worker is missing, out of quota, or unauthenticated,

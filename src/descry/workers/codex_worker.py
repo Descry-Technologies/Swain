@@ -50,10 +50,10 @@ class CodexWorker(BaseWorker):
             "codex", "exec",
             "--skip-git-repo-check",
             "-s", "read-only",
-            full_prompt,
         ]
         if self.model:
             cmd += ["-m", self.model]
+        cmd.append(full_prompt)
         return cmd
 
     async def run_patch_diff(
@@ -104,8 +104,8 @@ class CodexWorker(BaseWorker):
             "codex", "exec",
             "--skip-git-repo-check",
             "-s", "read-only",
-            full_prompt,
         ]
         if self.model:
             cmd += ["-m", self.model]
+        cmd.append(full_prompt)
         return cmd

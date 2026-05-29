@@ -41,11 +41,13 @@ Swain writes project memory under `.swain/` in the target repo:
     schedule.yaml
 ```
 
-The committable files are `config.yaml`, `profile.yaml`, `conventions.yaml`, and
-reviewed playbooks under `.swain/playbooks/active/`. The public demo also ships
-a checked-in `.swain/demo-history/` fixture so `swain status` can show the
-fix-first flow from a fresh source checkout. Treat generated playbooks as code
-review material before committing them.
+`config.yaml` records setup choices: Claude/Codex/hybrid mode, optional model
+overrides, and scan concurrency. The committable files are `config.yaml`,
+`profile.yaml`, `conventions.yaml`, and reviewed playbooks under
+`.swain/playbooks/active/`. The public demo also ships a checked-in
+`.swain/demo-history/` fixture so `swain status` can show the fix-first flow
+from a fresh source checkout. Treat generated playbooks as code review material
+before committing them.
 
 `.swain/.local/` is local-only. It stores run history, calibration data, and
 scheduling state, and should stay gitignored.

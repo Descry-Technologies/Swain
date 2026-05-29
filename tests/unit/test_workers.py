@@ -5,6 +5,8 @@ import pytest
 from descry.models import Task, WorkerType
 from descry.orchestrator.pool import WorkerPool
 from descry.workers.base import BaseWorker, WorkerResult
+from descry.workers.claude_worker import ClaudeWorker
+from descry.workers.codex_worker import CodexWorker
 
 
 class DummyWorker(BaseWorker):
@@ -131,6 +133,23 @@ def test_parse_error_includes_cli_diagnostic() -> None:
 
     assert result.report is None
     assert "session limit" in result.parse_error
+
+
+@pytest.mark.asyncio
+async def test_claude_model_option_is_before_prompt(tmp_path: Path) -> None:
+    cmd = await ClaudeWorker(model="sonnet")._build_command("Prompt", tmp_path)
+
+    assert cmd.index("--model") < cmd.index("-p")
+    assert cmd[cmd.index("--model") + 1] == "sonnet"
+
+
+@pytest.mark.asyncio
+async def test_codex_model_option_is_before_prompt(tmp_path: Path) -> None:
+    cmd = await CodexWorker(model="gpt-test")._build_command("Prompt", tmp_path)
+
+    assert cmd.index("-m") < len(cmd) - 1
+    assert cmd[cmd.index("-m") + 1] == "gpt-test"
+    assert "Prompt" in cmd[-1]
 
 
 def test_worker_pool_disables_quota_limited_worker_only() -> None:

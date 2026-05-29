@@ -105,5 +105,11 @@ case ":$PATH:" in
 esac
 
 say ""
-say "Run:"
+say "Run inside your project:"
+say "  cd /path/to/your/repo"
+say "  swain"
+say ""
+say "Or try the offline demo:"
 say "  swain demo"
+say ""
+say "First launch will explain Swain and help you choose Claude, Codex, or hybrid mode."

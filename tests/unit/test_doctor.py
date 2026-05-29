@@ -14,7 +14,7 @@ def test_profile_check_guides_first_run_when_missing(tmp_path: Path) -> None:
     check = _check_profile(tmp_path)
 
     assert check.status == "warn"
-    assert "swain init" in check.next_step
+    assert "swain setup" in check.next_step
 
 
 def test_profile_check_passes_when_profile_exists(tmp_path: Path) -> None:
