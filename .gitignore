@@ -2,3 +2,5 @@
 __pycache__/
 *.pyc
 .descry/.local/
+.swain/
+reports/
