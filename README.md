@@ -8,8 +8,6 @@ what blocks release, and what should be fixed first?
 
 ![Swain launch card showing a blocked launch verdict](docs/assets/demo/launch-card.svg)
 
-Launch page: [docs/launch/index.html](docs/launch/index.html)
-
 ## Quickstart
 
 Install once, then run `swain` from any terminal:
