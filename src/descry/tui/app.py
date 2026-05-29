@@ -30,6 +30,20 @@ from descry.orchestrator.lead import LeadOrchestrationError, LeadOrchestrator
 from descry.resources import builtin_playbooks_dir
 from descry.tui.voice import AgentVoice
 
+_COMMANDS = (
+    ("/scan", "run recon and build the fix queue"),
+    ("/scan details", "show the worker trace from the last scan"),
+    ("/status", "show mission, watch, decisions, and queue"),
+    ("/fix <id>", "draft a review-only patch"),
+    ("/feedback <id> fp", "mark a false positive"),
+    ("/feedback <id> fix", "mark a finding fixed"),
+    ("/watch", "configure git polling for this repo"),
+    ("/setup", "configure Claude/Codex workers"),
+    ("/update", "update Swain"),
+    ("/init", "rebuild the project profile"),
+    ("/help", "show command help"),
+)
+
 # ── Typewriter timing ────────────────────────────────────────────────────────
 
 _CHAR_DELAY   = 0.018   # base per-character delay (s)
@@ -261,6 +275,7 @@ class SwainApp(App):
         with Horizontal(id="main"):
             yield ChatLog(id="chat-log", markup=True, highlight=False, wrap=True)
             yield Sidebar(id="sidebar")
+        yield Static("", id="command-suggestions")
         yield Input(placeholder="Ask Swain anything...", id="message-input")
         yield Static(
             "[#333333]ctrl+c exit  ·  /scan  ·  /fix <id>  ·  "
@@ -269,16 +284,28 @@ class SwainApp(App):
         )
 
     async def on_mount(self) -> None:
+        self.query_one("#command-suggestions", Static).display = False
         self.query_one("#message-input", Input).focus()
         self._agent = SwainAgent(self)
         # Run greeting in background so UI renders first
         self.run_worker(self._agent.start(), exclusive=True, name="greeting")
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id != "message-input":
+            return
+        suggestions = command_suggestions_for(event.value)
+        panel = self.query_one("#command-suggestions", Static)
+        panel.update(suggestions)
+        panel.display = bool(suggestions)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
         if not text:
             return
         event.input.value = ""
+        suggestions = self.query_one("#command-suggestions", Static)
+        suggestions.update("")
+        suggestions.display = False
         log = self.query_one("#chat-log", ChatLog)
         log.user_label(text)
         if self._agent:
@@ -545,38 +572,9 @@ Respond with ONLY one of these JSON objects:
             await self._say(f"Something went wrong: {e}")
             return
 
-        findings = result.findings
-        secret_hits = len(result.secret_hits)
-        warnings = result.warnings
-        self._last_findings = findings
+        self._last_findings = result.findings
 
-        if result.decisions:
-            await self._stream(self._format_decision_log(result.decisions))
-
-        # Stream each finding narrative with a short pause between
-        for finding in findings:
-            narrative = self.voice.finding_narrative(finding)
-            await self._stream(narrative)
-            await asyncio.sleep(0.4)
-
-        if warnings:
-            await self._say(self.voice.scan_incomplete(warnings))
-
-        # Done summary
-        if findings or secret_hits or not warnings:
-            await self._say(self.voice.scan_done(findings, secret_hits))
-
-        # Opinion on what to do first
-        if findings:
-            opinion = self.voice.findings_summary_opinion(findings)
-            if opinion:
-                await asyncio.sleep(0.3)
-                await self._say(opinion)
-
-        next_step = self.voice.scan_next_step(findings, secret_hits)
-        if next_step:
-            await asyncio.sleep(0.2)
-            await self._say(next_step)
+        await self._stream(self._scan_overview(result))
 
         self._load_memory()
         self._refresh_sidebar()
@@ -943,6 +941,59 @@ Respond with ONLY one of these JSON objects:
                 lines.append(f"  Next: {decision.next_step}")
         return "\n".join(lines)
 
+    def _scan_overview(self, result: Any) -> str:
+        findings = result.findings
+        secret_hits = len(result.secret_hits)
+        warnings = result.warnings
+        lines = ["Scan overview."]
+        done = self.voice.scan_done(findings, secret_hits)
+        if done:
+            lines.append(done)
+        if warnings:
+            lines.extend([
+                "",
+                "Warnings",
+                (
+                    "I don't fully trust this scan yet. Some worker calls "
+                    "failed or returned unusable output."
+                ),
+            ])
+            lines.extend(f"- {warning}" for warning in warnings[:4])
+            if len(warnings) > 4:
+                lines.append(f"- {len(warnings) - 4} more warning(s)")
+        if result.decisions:
+            lines.extend(["", "Decisions"])
+            for decision in result.decisions[-5:]:
+                lines.append(f"- {decision.level.value}: {decision.summary}")
+                if decision.next_step:
+                    lines.append(f"  Next: {decision.next_step}")
+        if findings:
+            lines.extend(["", f"Findings ({len(findings)})"])
+            for finding in findings[:6]:
+                lines.append(
+                    "- "
+                    f"{finding.severity.value.upper()} `{finding.id[:8]}` "
+                    f"{finding.title} "
+                    f"({finding.evidence.file}:{finding.evidence.line_start or '?'}, "
+                    f"{finding.confidence:.0%})"
+                )
+            if len(findings) > 6:
+                lines.append(f"- {len(findings) - 6} more finding(s)")
+            opinion = self.voice.findings_summary_opinion(findings)
+            if opinion:
+                lines.extend(["", opinion])
+        elif secret_hits:
+            lines.extend([
+                "",
+                "Static secret hits need manual review before anything else.",
+            ])
+        lines.extend([
+            "",
+            self.voice.scan_next_step(findings, secret_hits),
+            "Use `/scan details` if you want the worker trace.",
+        ])
+        return "\n".join(line for line in lines if line is not None)
+
     def _status_with_coworker_state(self, base: str) -> str:
         try:
             snapshot = self._lead.status_snapshot()
@@ -1167,3 +1218,20 @@ Respond with ONLY one of these JSON objects:
             secret_hits=len(secrets),
             warnings=executor.task_warnings,
         )
+
+
+def command_suggestions_for(value: str) -> str:
+    if not value.startswith("/"):
+        return ""
+    query = value.strip().lower()
+    matches = [
+        (command, description)
+        for command, description in _COMMANDS
+        if query == "/" or command.startswith(query)
+    ]
+    if not matches:
+        return "[#777777]No matching command[/]"
+    return "\n".join(
+        f"[#00d4aa]{command}[/] [#777777]{description}[/]"
+        for command, description in matches
+    )

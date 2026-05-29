@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from textual.widgets import Input
+from textual.widgets import Input, Static
 
 import descry.tui.app as tui
 from descry.tui.app import ChatLog, SwainApp
@@ -66,3 +66,25 @@ async def test_tui_answers_launch_readiness_without_llm(
         assert "payments" in text
         assert "uploads" in text
         assert "/scan" in text
+
+
+@pytest.mark.asyncio
+async def test_tui_shows_slash_command_suggestions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _disable_typewriter(monkeypatch)
+    repo = tmp_path / "demo-repo"
+    repo.mkdir()
+
+    app = SwainApp(repo_path=repo)
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause(0.2)
+        input_box = app.query_one("#message-input", Input)
+        input_box.value = "/"
+        await pilot.pause(0.1)
+
+        suggestions = app.query_one("#command-suggestions", Static)
+        assert suggestions.display is True
+        assert "/scan" in suggestions.content
+        assert "/status" in suggestions.content

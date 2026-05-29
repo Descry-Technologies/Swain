@@ -1,8 +1,9 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+from descry.memory.coworker import DecisionLevel, DecisionRecord
 from descry.models import Evidence, Finding, FindingSource, Severity, WorkerType
-from descry.tui.app import Sidebar, SwainAgent
+from descry.tui.app import Sidebar, SwainAgent, command_suggestions_for
 from descry.tui.voice import AgentVoice
 
 
@@ -78,3 +79,47 @@ def test_scan_detail_focus_parses_short_command() -> None:
 
     assert agent._scan_detail_focus("/scan details auth") == "auth"
     assert agent._scan_detail_focus("/details payments") == "payments"
+
+
+def test_slash_command_suggestions_show_available_commands() -> None:
+    suggestions = command_suggestions_for("/")
+
+    assert "/scan" in suggestions
+    assert "/scan details" in suggestions
+    assert "/status" in suggestions
+    assert "/fix <id>" in suggestions
+    assert "/watch" in suggestions
+
+
+def test_slash_command_suggestions_filter_by_prefix() -> None:
+    suggestions = command_suggestions_for("/sta")
+
+    assert "/status" in suggestions
+    assert "/scan" not in suggestions
+
+
+def test_scan_overview_consolidates_findings_and_decisions() -> None:
+    agent = _agent()
+    finding = _finding()
+    result = SimpleNamespace(
+        findings=[finding],
+        secret_hits=[],
+        warnings=["secrets.scan codex timed out"],
+        decisions=[
+            DecisionRecord(
+                id="decision1",
+                timestamp="2026-05-29T00:00:00+00:00",
+                level=DecisionLevel.WARNING,
+                summary="Worker result needs attention",
+                next_step="Run swain doctor --probe-workers.",
+            )
+        ],
+    )
+
+    overview = agent._scan_overview(result)
+
+    assert overview.startswith("Scan overview.")
+    assert "Warnings" in overview
+    assert "Decisions" in overview
+    assert f"`{finding.id[:8]}`" in overview
+    assert "Use `/scan details`" in overview
