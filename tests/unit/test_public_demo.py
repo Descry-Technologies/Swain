@@ -70,6 +70,7 @@ def test_public_demo_assets_are_checked_in_and_scrubbed() -> None:
         "status.svg",
         "scan-mock.svg",
         "scan-flow.gif",
+        "launch-card.svg",
         "tui-first-run.svg",
         "finding-narrative.svg",
         "transcript.md",
@@ -88,6 +89,10 @@ def test_public_demo_assets_are_checked_in_and_scrubbed() -> None:
     assert (DEMO_ASSETS / "scan-flow.gif").stat().st_size > 50_000
     status_svg = (DEMO_ASSETS / "status.svg").read_text()
     assert "Fix&#160;first:&#160;`bee77255`" in status_svg
+    launch_card_svg = (DEMO_ASSETS / "launch-card.svg").read_text()
+    assert "BLOCKED" in launch_card_svg
+    assert "bee77255" in launch_card_svg
+    assert str(Path.home()) not in launch_card_svg
     assert "bee77255" in (DEMO_ASSETS / "finding-narrative.svg").read_text()
 
 

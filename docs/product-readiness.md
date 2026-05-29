@@ -12,6 +12,9 @@ specific, low-friction, and useful even when Claude or Codex quota is unavailabl
 - Scan summaries include a next step, not just a pass/fail result.
 - `swain status` ranks the latest open findings, names the fix-first item, and
   prints exact CLI commands for a patch draft or false-positive feedback.
+- `swain launch-card` exports a 1200x630 SVG with the launch verdict, blocker
+  count, top issue, and review-only next command for LinkedIn/Product Hunt
+  launch assets.
 - Local fallback answers handle "what should I fix first?" and launch-readiness
   questions without needing an LLM call.
 - README explains the first-run TUI flow and the launch-risk surfaces Swain covers.
@@ -43,7 +46,7 @@ specific, low-friction, and useful even when Claude or Codex quota is unavailabl
 - `scripts/capture_demo_assets.py` generates repeatable public SVG assets and a
   transcript from `examples/launchpad-saas`.
 - Checked-in demo assets cover doctor, status, mock scan, first-run chat, a scan
-  flow GIF, and a finding narrative with a visible finding ID.
+  flow GIF, a launch-card SVG, and a finding narrative with a visible finding ID.
 - The public status demo is seeded from checked-in worker fixtures, so it shows
   open findings, a fix-first recommendation, and exact fix/feedback commands
   without depending on live Claude/Codex quota.
@@ -70,6 +73,8 @@ specific, low-friction, and useful even when Claude or Codex quota is unavailabl
   and either a fix path or a feedback path.
 - CLI handoff: `swain status` can tell a non-expert what to fix first from the
   latest scan without requiring JSON or TUI history spelunking.
+- Social handoff: `swain launch-card` can produce a privacy-safe launch verdict
+  image without exposing source code or worker trace.
 - Trust: Swain never writes to the target repo during scans, and patch generation
   returns reviewable diffs instead of applying changes silently.
 - Focus: built-in checks cover launch-critical app surfaces: auth, payments,

@@ -35,6 +35,7 @@ _COMMANDS = (
     ("/scan details", "show the worker trace from the last scan"),
     ("/status", "show mission, watch, decisions, and queue"),
     ("/fix <id>", "draft a review-only patch"),
+    ("/launch-card", "export a shareable launch verdict SVG"),
     ("/feedback <id> fp", "mark a false positive"),
     ("/feedback <id> fix", "mark a finding fixed"),
     ("/watch", "configure git polling for this repo"),
@@ -402,6 +403,8 @@ class SwainAgent:
         elif cmd.startswith(("/fix ", "fix ")):
             fid = text.split(None, 1)[1].strip() if " " in text else ""
             await self._do_fix(fid)
+        elif cmd in ("/launch-card", "launch-card"):
+            await self._do_launch_card()
         elif cmd.startswith(("/feedback ", "feedback ")):
             parts = text.split()
             if len(parts) >= 3:
@@ -651,6 +654,24 @@ Respond with ONLY one of these JSON objects:
         await self._say(
             "Patch draft. I did not apply it.\n\n"
             f"{escape(suggestion.diff)}"
+        )
+
+    async def _do_launch_card(self) -> None:
+        try:
+            from descry.commands.launch_card import run_launch_card
+
+            output = self.repo_path / "swain-launch-card.svg"
+            if not run_launch_card(self.repo_path, out_path=output):
+                await self._say(
+                    "I need a Swain profile before I can make a launch card."
+                )
+                return
+        except Exception as e:
+            await self._say(f"Couldn't export the launch card: {e}")
+            return
+        await self._say(
+            "Launch card exported.\n\n"
+            f"`{output}`"
         )
 
     async def _do_feedback(self, finding_id: str, action: str) -> None:

@@ -88,6 +88,7 @@ def test_slash_command_suggestions_show_available_commands() -> None:
     assert "/scan details" in suggestions
     assert "/status" in suggestions
     assert "/fix <id>" in suggestions
+    assert "/launch-card" in suggestions
     assert "/watch" in suggestions
 
 

@@ -2,6 +2,13 @@
 
 Generated from `examples/launchpad-saas` using `scripts/capture_demo_assets.py`.
 The status screenshot is seeded from checked-in fixture findings so the fix-first handoff is reproducible without live Claude/Codex quota.
+The launch card is a 1200x630 share image generated from the same fix-first history.
+
+## Launch Card
+
+```bash
+swain launch-card examples/launchpad-saas --out docs/assets/demo/launch-card.svg
+```
 
 ## Swain Doctor
 
@@ -18,7 +25,7 @@ swain doctor examples/launchpad-saas --no-probe-workers
 ┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
 │ repo               │ ok       │ <swain>/examples/launchpad-saas              │                                                         │
 │ setup              │ ok       │ hybrid (Claude CLI: CLI default, Codex CLI: CLI default); careful  │                                                         │
-│                    │          │ concurrency, max 1 at once                                         │                                                         │
+│                    │          │ concurrency, max 1 at once; CLI timeout none                       │                                                         │
 │ profile            │ ok       │ .swain/profile.yaml found                                          │                                                         │
 │ playbooks          │ ok       │ 7 applicable of 7 loaded                                           │                                                         │
 │ package hygiene    │ ok       │ no tracked Python bytecode                                         │                                                         │
@@ -52,6 +59,15 @@ Active schedule: 4 playbook(s)
   •  sast.xss.react
   •  sast.sql-injection
 
+Mission:
+  • idle
+
+Fix queue: 5
+  • next `bee77255` — Checkout trusts client-supplied price and tenant metadata (critical, 94% confidence, network-exposed, launch-risk surface)
+
+Watch:
+  • not enabled
+
 Recent runs:
   • 2026-05-29T16:45  5 finding(s)
 
@@ -74,14 +90,20 @@ swain scan examples/launchpad-saas --output markdown --mock
 ```
 
 ```text
-Running deterministic scanners...
-Mission demo12345678: 7 playbook(s) to run
-
 # Swain Security Report
 
 **Run ID**: `demo12345678`  
 **Date**: 2026-05-29 16:45 UTC
 
+
+## Decision Log
+
+- **info**: Mapped repository surfaces
+  Inventory found 17 files and stack=react, fastapi, stripe.
+- **info**: Queued bounded worker review
+  7 playbooks; 47 file references. Concurrency follows the saved careful quota profile.
+- **info**: No launch blockers found in completed checks
+  Recon completed without findings or static secret hits.
 
 ✅ No findings.
 ```

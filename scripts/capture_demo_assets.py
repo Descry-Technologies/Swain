@@ -68,6 +68,7 @@ def main() -> None:
                 command=[str(swain), "status", "examples/launchpad-saas"],
             )
         )
+        _write_launch_card_asset(out_dir / "launch-card.svg")
         commands.append(
             _capture_command(
                 name="scan-mock",
@@ -369,6 +370,19 @@ def _write_finding_svg(path: Path) -> None:
     console.save_svg(str(path), title="Swain - finding narrative")
 
 
+def _write_launch_card_asset(path: Path) -> None:
+    from descry.commands.launch_card import (
+        build_launch_card_data,
+        write_launch_card_svg,
+    )
+
+    data = build_launch_card_data(
+        DEMO_REPO,
+        generated_at=datetime(2026, 5, 29, 16, 45, tzinfo=UTC),
+    )
+    write_launch_card_svg(data, path)
+
+
 def _seed_demo_history() -> None:
     from descry.models import Finding, FindingSource, Severity, WorkerType
 
@@ -430,6 +444,15 @@ def _write_transcript(commands: list[CapturedCommand], path: Path) -> None:
         "`scripts/capture_demo_assets.py`.",
         "The status screenshot is seeded from checked-in fixture findings so "
         "the fix-first handoff is reproducible without live Claude/Codex quota.",
+        "The launch card is a 1200x630 share image generated from the same "
+        "fix-first history.",
+        "",
+        "## Launch Card",
+        "",
+        "```bash",
+        "swain launch-card examples/launchpad-saas "
+        "--out docs/assets/demo/launch-card.svg",
+        "```",
         "",
     ]
     for captured in commands:

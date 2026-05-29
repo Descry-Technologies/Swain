@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Swain launch card">
+<defs>
+<linearGradient id="accent" x1="0" x2="1" y1="0" y2="1">
+<stop offset="0" stop-color="#2fdd92"/>
+<stop offset="0.55" stop-color="#31c6f7"/>
+<stop offset="1" stop-color="#f0b429"/>
+</linearGradient>
+<filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+<feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000" flood-opacity="0.35"/>
+</filter>
+</defs>
+<rect width="1200" height="630" fill="#101214"/>
+<rect x="34" y="34" width="1132" height="562" rx="28" fill="#15191d" stroke="#263039" filter="url(#shadow)"/>
+<rect x="34" y="34" width="1132" height="10" rx="5" fill="url(#accent)"/>
+<text x="72" y="86" fill="#2fdd92" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="24" font-weight="700">Swain Launch Check</text>
+<text x="72" y="122" fill="#9aa4b2" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="19" font-weight="500">launchpad-saas</text>
+<text x="72" y="202" fill="#ff5a5f" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="72" font-weight="800">BLOCKED</text>
+<text x="76" y="244" fill="#f3f6f4" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="28" font-weight="650">Fix launch blockers before shipping.</text>
+<text x="76" y="292" fill="#cfd8d3" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="24" font-weight="500">Public demo SaaS with intentional launch-risk</text>
+<text x="76" y="323" fill="#cfd8d3" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="24" font-weight="500">vulnerabilities</text>
+<text x="76" y="372" fill="#8f9aa3" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="18" font-weight="500">react, fastapi, stripe - auth, payments, uploads</text>
+<rect x="748" y="82" width="150" height="104" rx="18" fill="#101418" stroke="#2c3741"/>
+<text x="774" y="140" fill="#31c6f7" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="44" font-weight="800">5</text>
+<text x="774" y="168" fill="#9aa4b2" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="15" font-weight="500">Open findings</text>
+<rect x="956" y="82" width="150" height="104" rx="18" fill="#101418" stroke="#2c3741"/>
+<text x="982" y="140" fill="#ff5a5f" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="44" font-weight="800">5</text>
+<text x="982" y="168" fill="#9aa4b2" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="15" font-weight="500">Launch blockers</text>
+<rect x="724" y="226" width="382" height="198" rx="18" fill="#101418" stroke="#2c3741"/>
+<text x="752" y="266" fill="#8f9aa3" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="18" font-weight="650">Fix first</text>
+<text x="976" y="266" fill="#ff5a5f" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="18" font-weight="700">bee77255</text>
+<text x="752" y="306" fill="#f3f6f4" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="25" font-weight="500">Checkout trusts client-</text>
+<text x="752" y="338" fill="#f3f6f4" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="25" font-weight="500">supplied price and tenant</text>
+<text x="752" y="370" fill="#f3f6f4" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="25" font-weight="500">metadata</text>
+<text x="752" y="388" fill="#9aa4b2" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="15" font-weight="500">CRITICAL - 94% confidence -</text>
+<text x="752" y="409" fill="#9aa4b2" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="15" font-weight="500">backend/app/api/v1/billing.py:15</text>
+<rect x="72" y="468" width="1034" height="72" rx="18" fill="#0f1715" stroke="#28443b"/>
+<text x="100" y="511" fill="#2fdd92" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="18" font-weight="700">Next</text>
+<text x="166" y="511" fill="#f3f6f4" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="20" font-weight="500">swain fix bee77255 --path examples/launchpad-saas</text>
+<text x="72" y="574" fill="#7f8a92" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="16" font-weight="500">review-only patch drafts - no source edits are applied</text>
+<text x="952" y="574" fill="#7f8a92" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="16" font-weight="500">2026-05-29 16:45 UTC</text>
+</svg>

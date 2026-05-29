@@ -3,10 +3,10 @@
 **Your local AI security lead for vibe coders shipping SaaS fast.**
 
 Swain is for solo builders and small teams who have a real app that is almost
-ready to ship, but still need a practical security review of the launch-risk
-surfaces: auth, billing, uploads, tenant boundaries, secrets, SQL, and XSS.
+ready to ship, but still need a plain-English launch verdict: can this ship,
+what blocks release, and what should be fixed first?
 
-![Swain status showing a fix-first recommendation](docs/assets/demo/status.svg)
+![Swain launch card showing a blocked launch verdict](docs/assets/demo/launch-card.svg)
 
 ## Quickstart
 
@@ -44,6 +44,16 @@ swain demo
 ```
 
 `swain demo` does not spend Claude/Codex quota.
+
+After a scan, export a shareable launch verdict:
+
+```bash
+swain launch-card --out swain-launch-card.svg
+```
+
+The card is a 1200x630 SVG built from local scan history. It is designed for
+LinkedIn posts, Product Hunt gallery prep, and launch updates without exposing
+raw worker logs or source code.
 
 `doctor` checks repo setup, bundled playbooks, local package hygiene, and your
 Claude/Codex CLIs. If a worker is missing, out of quota, or unauthenticated,
@@ -84,6 +94,19 @@ Fix first: `bee77255` - Checkout trusts client-supplied price and tenant metadat
 apply code changes. `swain feedback <id> fp` teaches Swain when a finding is a
 false positive for this repo.
 
+## Launch Card
+
+`swain launch-card` turns the latest scan history into a concise ship/no-ship
+card:
+
+- launch verdict: `BLOCKED`, `REVIEW`, `READY`, or `NO SCAN YET`
+- open finding count and launch-blocker count
+- top issue and exact next command
+- reminder that patch drafts are review-only
+
+This is the intended social artifact for build-in-public updates: show the
+launch decision, not a wall of terminal output.
+
 ## Demo
 
 Use [examples/launchpad-saas](examples/launchpad-saas) for public screenshots,
@@ -93,6 +116,7 @@ risks.
 
 Demo assets:
 
+- [launch-card.svg](docs/assets/demo/launch-card.svg)
 - [scan-flow.gif](docs/assets/demo/scan-flow.gif)
 - [status.svg](docs/assets/demo/status.svg)
 - [doctor.svg](docs/assets/demo/doctor.svg)

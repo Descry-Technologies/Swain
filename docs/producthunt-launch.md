@@ -4,12 +4,12 @@
 
 Name: Swain
 
-Tagline: A local AI security lead for vibe coders shipping SaaS fast
+Tagline: Ask your repo if it is safe to ship
 
 Short description:
 
 ```text
-Swain runs on your Claude/Codex CLIs, scans launch-risk surfaces, tells you what to fix first, and drafts reviewable patches.
+Swain is a local AI security lead for vibe-coded apps. It scans launch-risk surfaces, gives a ship/no-ship verdict, ranks the first fix, and drafts review-only patches through your Claude/Codex CLIs.
 ```
 
 Categories:
@@ -38,6 +38,7 @@ What to emphasize:
   the main product path
 - uses Claude/Codex CLIs builders may already pay for
 - focused on practical launch risks, not broad compliance
+- `launch-card` exports a 1200x630 ship/no-ship asset for social launch updates
 - `status` gives a fix-first recommendation
 - `fix` drafts a reviewable patch, not an auto-applied change
 - `feedback` teaches false positives
@@ -47,22 +48,50 @@ What to emphasize:
 
 Use these assets instead of a wall of terminal text:
 
+- `docs/assets/demo/launch-card.svg`
 - `docs/assets/demo/scan-flow.gif`
 - `docs/assets/demo/status.svg`
 - `docs/assets/demo/finding-narrative.svg`
 - `docs/assets/demo/doctor.svg`
 - `docs/assets/demo/tui-first-run.svg`
 
-The status asset should show `Fix first: bee77255`.
+The launch card should be the first gallery image. It should show `BLOCKED`,
+`bee77255`, and the review-only next command. The status asset should show
+`Fix first: bee77255`.
+
+## Launch Page Proof
+
+Product Hunt is a community launch channel, so the page should be clear,
+usable, and easy to discuss. The official Product Hunt guidance emphasizes that
+products should be usable, high-quality, interesting to the community, and that
+makers should ask people to visit/comment rather than directly ask for upvotes.
+
+Use this proof stack:
+
+- install proof: one-command source installer
+- no-quota proof: `swain demo`
+- reliability proof: `swain doctor` shows worker readiness before spending quota
+- action proof: `swain status` chooses the first fix
+- social proof artifact: `swain launch-card`
+- trust proof: `/fix` prints reviewable diffs and does not apply code changes
+
+Sources to re-check before launch:
+
+- Product Hunt Launch Guide: https://www.producthunt.com/launch
+- Product Hunt "How Product Hunt works":
+  https://www.producthunt.com/launch/how-product-hunt-works
+- LinkedIn Product Pages media guidance:
+  https://www.linkedin.com/help/linkedin/answer/a770272
 
 ## First Comment Draft
 
 ```text
 Hey PH - I built Swain because vibe-coded apps often get to "almost ready to ship" before anyone looks closely at auth, billing, uploads, tenant boundaries, secrets, SQL, or XSS.
 
-Swain is a local AI security lead for that moment.
+Swain is a local AI security lead for that moment. The core question is not
+"did a scanner run?" It is "can I ship this?"
 
-It runs from your repo, uses your existing Claude/Codex CLIs, scans the risky product surfaces first, and tells you what to fix before launch. It also drafts reviewable patches and learns from false-positive feedback.
+It runs from your repo, uses your existing Claude/Codex CLIs, scans the risky product surfaces first, and gives a ship/no-ship verdict with the first fix. It also drafts reviewable patches, learns from false-positive feedback, and can export a launch card for build-in-public updates.
 
 For v1, the install path is one curl command from GitHub, then `swain` inside your repo. First launch explains what Swain reads/writes and lets you choose Claude, Codex, or hybrid mode before a real scan. The public demo app is intentionally vulnerable, so you can see the full loop with `swain demo` before exposing private code.
 

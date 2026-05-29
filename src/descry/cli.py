@@ -23,6 +23,7 @@ _COMMAND_NAMES = {
     "scan",
     "feedback",
     "fix",
+    "launch-card",
     "status",
     "doctor",
     "demo",
@@ -259,6 +260,27 @@ def fix(
     from descry.commands.fix import run_fix
 
     asyncio.run(run_fix(_get_repo_root(path), finding_id=finding_id))
+
+
+@app.command()
+def launch_card(
+    path: str = typer.Argument(None, help="Repo path"),
+    out: str = typer.Option(
+        None,
+        "--out",
+        "-o",
+        help="Output SVG path (defaults to <repo>/swain-launch-card.svg).",
+    ),
+) -> None:
+    """Generate a shareable launch-readiness SVG from the latest scan."""
+    from descry.commands.launch_card import run_launch_card
+
+    ok = run_launch_card(
+        _get_repo_root(path),
+        out_path=Path(out).resolve() if out else None,
+    )
+    if not ok:
+        raise typer.Exit(1)
 
 
 @app.command()

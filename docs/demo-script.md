@@ -81,6 +81,16 @@ setup. The demo path stays offline so nobody spends quota while evaluating."
    Say: "`/fix` asks Codex for a reviewable diff. `/feedback` teaches Swain
    this repo's conventions so repeated false positives decay."
 
+6. Export the launch moment.
+
+   ```bash
+   swain launch-card examples/launchpad-saas --out docs/assets/demo/launch-card.svg
+   ```
+
+   Say: "This is the build-in-public artifact: the launch verdict, blocker
+   count, first fix, and a review-only command. It is safe to show because it
+   does not include source code or worker logs."
+
 ## If Claude Is Out Of Quota
 
 Run:
