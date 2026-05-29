@@ -25,6 +25,12 @@ should use Claude CLI, Codex CLI, or hybrid mode. It also lets you choose CLI
 default models or exact model ids, and a scan speed so quota use is explicit.
 Setup builds a local project profile without spending model quota.
 
+Update the source-installed command without PyPI:
+
+```bash
+swain update
+```
+
 From outside the repo:
 
 ```bash
@@ -106,7 +112,9 @@ ImageMagick's `convert` binary is only required for regenerating
 ## Privacy And Trust
 
 Swain runs locally and uses your installed `claude` and `codex` CLIs as model
-workers. It stores project memory under `.swain/` in the target repo. Scans use
+workers by default. Advanced users can switch a worker to direct API mode in
+`swain setup`, using `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` and exact model ids.
+It stores project memory under `.swain/` in the target repo. Scans use
 isolated file copies for worker analysis, and the planner excludes local secret
 material such as `.env`, private keys, and PEM files before selecting files for
 model workers.

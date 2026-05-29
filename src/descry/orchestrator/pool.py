@@ -56,14 +56,20 @@ class WorkerPool:
                 continue
             if on_event:
                 on_event(
-                    f"{task.playbook_id}: {worker.worker_type.value} reviewing "
-                    f"{len(files)} file{'s' if len(files) != 1 else ''}"
+                    f"{task.playbook_id}: waiting for "
+                    f"{worker.worker_type.value} subagent"
                 )
             type_sem = self._type_sems.setdefault(
                 worker.worker_type,
                 asyncio.Semaphore(self._max_per_type),
             )
             async with self._global_sem, type_sem:
+                if on_event:
+                    on_event(
+                        f"{task.playbook_id}: {worker.worker_type.value} "
+                        f"reviewing {len(files)} file"
+                        f"{'s' if len(files) != 1 else ''}"
+                    )
                 result = await worker.run(
                     task.id,
                     prompt,

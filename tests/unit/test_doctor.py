@@ -8,6 +8,8 @@ from descry.commands.doctor import (
     _status_label,
     collect_checks,
 )
+from descry.memory.config import SwainConfig
+from descry.memory.store import MemoryStore
 
 
 def test_profile_check_guides_first_run_when_missing(tmp_path: Path) -> None:
@@ -46,3 +48,19 @@ async def test_collect_checks_can_skip_worker_probes(tmp_path: Path) -> None:
     names = {check.name for check in checks}
     assert {"repo", "profile", "playbooks", "package hygiene"}.issubset(names)
     assert not (tmp_path / ".swain").exists()
+
+
+@pytest.mark.asyncio
+async def test_doctor_reports_configured_api_worker_without_key(tmp_path: Path) -> None:
+    store = MemoryStore(tmp_path)
+    SwainConfig.completed(
+        worker_mode="codex",
+        codex_runtime="api",
+        codex_model="gpt-test",
+    ).save(store)
+
+    checks = await collect_checks(tmp_path, probe_workers=False)
+    codex_api = next(check for check in checks if check.name == "codex api")
+
+    assert codex_api.status == "warn"
+    assert "OPENAI_API_KEY" in codex_api.detail

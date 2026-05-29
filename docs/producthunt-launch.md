@@ -32,7 +32,10 @@ XSS.
 What to emphasize:
 
 - one-command source installer from GitHub
+- `swain update` for source-based updates without PyPI
 - first launch setup for Claude/Codex/hybrid mode, model selection, and scan speed
+- direct API runtime is available for advanced users, but CLI subscriptions stay
+  the main product path
 - uses Claude/Codex CLIs builders may already pay for
 - focused on practical launch risks, not broad compliance
 - `status` gives a fix-first recommendation

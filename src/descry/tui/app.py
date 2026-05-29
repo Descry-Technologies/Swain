@@ -86,7 +86,16 @@ class ChatLog(RichLog):
         self.write(f"  [italic #444444]{text}[/]")
 
     def scan_event(self, text: str) -> None:
-        self.write(f"  [#777777]• {text}[/]")
+        if " waiting for " in text:
+            self.write(f"  [#777777]queue[/] [#888888]{text}[/]")
+        elif " reviewing " in text:
+            self.write(f"  [bold #00d4aa]subagent[/] [#888888]{text}[/]")
+        elif " returned " in text:
+            self.write(f"  [#2fdd92]done[/] [#888888]{text}[/]")
+        elif "failed" in text or text.startswith("warning:"):
+            self.write(f"  [#f0b429]warn[/] [#888888]{text}[/]")
+        else:
+            self.write(f"  [#777777]• {text}[/]")
 
 
 @dataclass(frozen=True)
@@ -112,6 +121,14 @@ class Sidebar(Vertical):
     finding_count: reactive[int] = reactive(0)
     convention_count: reactive[int] = reactive(0)
     last_run: reactive[str] = reactive("never")
+    scan_phase: reactive[str] = reactive("idle")
+    worker_setup: reactive[str] = reactive("not configured")
+    subagents: reactive[str] = reactive("idle")
+    last_event: reactive[str] = reactive("none")
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._task_status: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         yield Static("[bold #00d4aa]Swain[/]\n", id="sb-brand")
@@ -121,11 +138,18 @@ class Sidebar(Vertical):
         yield Static("", id="sb-findings")
         yield Static("", id="sb-conventions")
         yield Static("", id="sb-last-run")
+        yield Static("", id="sb-scan-phase")
+        yield Static("", id="sb-worker-setup")
+        yield Static("", id="sb-subagents")
+        yield Static("", id="sb-last-event")
 
     def on_mount(self) -> None:
         self._refresh_rows()
 
     def _refresh_rows(self) -> None:
+        if not self.is_mounted:
+            return
+
         def row(wid: str, label: str, val: str) -> None:
             self.query_one(f"#{wid}", Static).update(
                 f"[#555555]{label}[/]\n[#cccccc]{val or '—'}[/]\n"
@@ -141,6 +165,58 @@ class Sidebar(Vertical):
         row("sb-findings",    "findings",   findings_label)
         row("sb-conventions", "learned",    convention_label)
         row("sb-last-run",    "last scan",  self.last_run)
+        row("sb-scan-phase",  "scan",       self.scan_phase)
+        row("sb-worker-setup", "workers",   self.worker_setup)
+        row("sb-subagents",   "subagents",  self.subagents)
+        row("sb-last-event",  "last event", self.last_event)
+
+    def record_scan_event(self, text: str) -> None:
+        self.last_event = text[:140]
+        if text.startswith("indexing repo"):
+            self._task_status.clear()
+            self.scan_phase = "indexing repo"
+        elif text.startswith("worker setup:"):
+            self.worker_setup = text.removeprefix("worker setup:").strip()
+        elif text.startswith("planned ") or text.startswith("mission "):
+            self.scan_phase = text
+        elif text.startswith("queue:"):
+            self.scan_phase = text
+        elif text.startswith("warning:"):
+            self.scan_phase = "needs attention"
+        elif ": starting with " in text:
+            playbook = text.split(":", 1)[0]
+            self._task_status[playbook] = "queued"
+        elif " waiting for " in text and ":" in text:
+            playbook, rest = text.split(":", 1)
+            worker = rest.strip().removeprefix("waiting for ").split(" ", 1)[0]
+            self._task_status[playbook] = f"{worker} waiting"
+        elif " reviewing " in text and ":" in text:
+            playbook, rest = text.split(":", 1)
+            worker = rest.strip().split(" reviewing ", 1)[0]
+            self._task_status[playbook] = f"{worker} reviewing"
+            self.scan_phase = f"{worker} subagent active"
+        elif " returned " in text and ":" in text:
+            playbook, rest = text.split(":", 1)
+            worker = rest.strip().split(" returned ", 1)[0]
+            self._task_status[playbook] = f"{worker} done"
+        elif " failed " in text and ":" in text:
+            playbook, rest = text.split(":", 1)
+            worker = rest.strip().split(" failed ", 1)[0]
+            self._task_status[playbook] = f"{worker} failed"
+            self.scan_phase = "worker issue"
+        self.subagents = self._format_subagents()
+
+    def _format_subagents(self) -> str:
+        if not self._task_status:
+            return "idle"
+        rows = [
+            f"{name}: {status}"
+            for name, status in sorted(self._task_status.items())[:6]
+        ]
+        remaining = len(self._task_status) - len(rows)
+        if remaining > 0:
+            rows.append(f"+{remaining} more")
+        return "\n".join(rows)
 
     def watch_project_name(self, _: str) -> None: self._refresh_rows()
     def watch_stack(self, _: str) -> None: self._refresh_rows()
@@ -148,6 +224,10 @@ class Sidebar(Vertical):
     def watch_finding_count(self, _: int) -> None: self._refresh_rows()
     def watch_convention_count(self, _: int) -> None: self._refresh_rows()
     def watch_last_run(self, _: str) -> None: self._refresh_rows()
+    def watch_scan_phase(self, _: str) -> None: self._refresh_rows()
+    def watch_worker_setup(self, _: str) -> None: self._refresh_rows()
+    def watch_subagents(self, _: str) -> None: self._refresh_rows()
+    def watch_last_event(self, _: str) -> None: self._refresh_rows()
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -209,6 +289,9 @@ class SwainApp(App):
         sb = self.query_one("#sidebar", Sidebar)
         for k, v in kwargs.items():
             setattr(sb, k, v)
+
+    def record_scan_event(self, text: str) -> None:
+        self.query_one("#sidebar", Sidebar).record_scan_event(text)
 
 
 # ── Agent ─────────────────────────────────────────────────────────────────────
@@ -293,6 +376,8 @@ class SwainAgent:
             await self._do_init()
         elif cmd in ("/setup", "setup"):
             await self._do_setup()
+        elif cmd in ("/update", "update"):
+            await self._do_update()
         elif cmd in ("help", "/help"):
             await self._do_help()
         else:
@@ -505,6 +590,12 @@ Respond with ONLY one of these JSON objects:
             f"Run:\n  swain setup {self.repo_path}"
         )
 
+    async def _do_update(self) -> None:
+        await self._say(
+            "Updates run in the terminal so you can see the git pull and "
+            "reinstall output.\n\nRun:\n  swain update"
+        )
+
     async def _do_explain(self, topic: str) -> None:
         """Use claude to explain a security topic in plain English."""
         if not shutil.which("claude"):
@@ -555,6 +646,7 @@ Respond with ONLY one of these JSON objects:
     def _scan_event(self, text: str) -> None:
         log = self.app.query_one("#chat-log", ChatLog)
         log.scan_event(text)
+        self.app.record_scan_event(text)
 
     async def _stream(self, text: str) -> None:
         """Write agent message with typewriter effect."""
@@ -600,7 +692,8 @@ Respond with ONLY one of these JSON objects:
             return (
                 "Before shipping, I want a clean pass on auth, payments, uploads, "
                 "secrets, and tenant/data access. Run /scan, then fix anything "
-                "critical or high before you trust the launch."
+                "critical or high before you trust the launch. I'll be blunt, "
+                "but I'll show my work."
             )
 
         return ""

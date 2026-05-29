@@ -26,6 +26,7 @@ _COMMAND_NAMES = {
     "doctor",
     "demo",
     "setup",
+    "update",
     "version",
 }
 
@@ -149,15 +150,35 @@ def setup(
         "--claude-model",
         help="Claude model id, or 'default' for the Claude CLI default",
     ),
+    claude_runtime: str = typer.Option(
+        None,
+        "--claude-runtime",
+        help="Claude runtime: cli or api",
+    ),
     codex_model: str = typer.Option(
         None,
         "--codex-model",
         help="Codex model id, or 'default' for the Codex CLI default",
     ),
+    codex_runtime: str = typer.Option(
+        None,
+        "--codex-runtime",
+        help="Codex runtime: cli or api",
+    ),
     speed: str = typer.Option(
         None,
         "--speed",
         help="Scan speed: careful, balanced, or fast",
+    ),
+    api_max_output_tokens: int = typer.Option(
+        None,
+        "--api-max-output-tokens",
+        help="Maximum direct API output tokens per worker call",
+    ),
+    api_file_char_limit: int = typer.Option(
+        None,
+        "--api-file-char-limit",
+        help="Maximum selected source characters included in direct API prompts",
     ),
     yes: bool = typer.Option(
         False,
@@ -181,7 +202,11 @@ def setup(
                 worker_mode=mode,
                 claude_model=claude_model,
                 codex_model=codex_model,
+                claude_runtime=claude_runtime,
+                codex_runtime=codex_runtime,
                 concurrency=speed,
+                api_max_output_tokens=api_max_output_tokens,
+                api_file_char_limit=api_file_char_limit,
                 interactive=not yes,
                 init_profile=not no_profile,
             )
@@ -272,6 +297,36 @@ def demo(
         from descry.tui.app import SwainApp
 
         SwainApp(repo_path=repo).run()
+
+
+@app.command()
+def update(
+    source_dir: str = typer.Option(
+        None,
+        "--source-dir",
+        help="Managed Swain source checkout (defaults to ~/.swain/source)",
+    ),
+    bin_dir: str = typer.Option(
+        None,
+        "--bin-dir",
+        help="Directory where the swain command should be installed",
+    ),
+    check: bool = typer.Option(
+        False,
+        "--check",
+        help="Fetch and report upstream status without reinstalling",
+    ),
+) -> None:
+    """Update a source-installed Swain command without PyPI."""
+    from descry.commands.update import run_update
+
+    ok = run_update(
+        source_dir=Path(source_dir).expanduser() if source_dir else None,
+        bin_dir=Path(bin_dir).expanduser() if bin_dir else None,
+        check_only=check,
+    )
+    if not ok:
+        raise typer.Exit(1)
 
 
 @app.command()

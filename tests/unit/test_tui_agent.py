@@ -2,7 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from descry.models import Evidence, Finding, FindingSource, Severity, WorkerType
-from descry.tui.app import SwainAgent
+from descry.tui.app import Sidebar, SwainAgent
 from descry.tui.voice import AgentVoice
 
 
@@ -43,3 +43,17 @@ def test_local_launch_question_sets_market_ready_bar() -> None:
     assert "auth" in answer
     assert "payments" in answer
     assert "uploads" in answer
+
+
+def test_sidebar_tracks_scan_subagent_progress() -> None:
+    sidebar = Sidebar()
+
+    sidebar.record_scan_event(
+        "sast.payments: codex reviewing 8 files"
+    )
+    sidebar.record_scan_event(
+        "sast.payments: codex returned 1 finding"
+    )
+
+    assert sidebar.scan_phase == "codex subagent active"
+    assert "sast.payments: codex done" in sidebar.subagents

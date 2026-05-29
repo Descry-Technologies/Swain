@@ -19,12 +19,20 @@ how aggressively scans should spend quota in parallel.
 It also builds the initial project profile with local scanning only, so setup
 does not spend model quota.
 
+Update later without PyPI:
+
+```bash
+swain update
+```
+
 ## Prerequisites
 
 - Python 3.11 or newer
 - Git
 - `curl` or `wget`
 - Optional: authenticated `claude` and/or `codex` CLIs for real scans
+- Optional advanced path: `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` if you
+  choose direct API runtime during setup
 - Optional: `uv` if you are contributing from a checkout
 - Optional: ImageMagick `convert` only when regenerating `scan-flow.gif`
 
@@ -74,6 +82,16 @@ swain status /path/to/your/repo
 
 Real scans use your local Claude/Codex CLIs. Quota, auth, and local CLI behavior
 come from those tools, not from a Swain-hosted service.
+
+CLI runtime is the main product path. Direct API runtime is available in setup
+for advanced users who prefer API keys and exact model ids:
+
+```bash
+swain setup /path/to/your/repo --mode codex --codex-runtime api --codex-model gpt-5
+```
+
+API mode sends selected source snippets inline to the provider API instead of
+starting the local CLI worker.
 
 ## Common Failures
 
@@ -134,6 +152,18 @@ uv run python scripts/capture_demo_assets.py
 ```
 
 The CLI, tests, source install, and scans do not require ImageMagick.
+
+Updater cannot find managed source:
+
+```text
+No managed Swain source checkout found.
+```
+
+Run the installer again:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Descry-Technologies/Swain/main/install.sh | sh
+```
 
 ## Contributor Checkout
 

@@ -4,6 +4,10 @@ import pytest
 
 from descry.models import Task, WorkerType
 from descry.orchestrator.pool import WorkerPool
+from descry.workers.api_worker import (
+    OpenAIResponsesAPIWorker,
+    _openai_text,
+)
 from descry.workers.base import BaseWorker, WorkerResult
 from descry.workers.claude_worker import ClaudeWorker
 from descry.workers.codex_worker import CodexWorker
@@ -135,6 +139,39 @@ def test_parse_error_includes_cli_diagnostic() -> None:
     assert "session limit" in result.parse_error
 
 
+def test_openai_text_extracts_responses_output() -> None:
+    text = _openai_text({
+        "output": [
+            {
+                "content": [
+                    {"type": "output_text", "text": '{"findings":[]}'},
+                ],
+            }
+        ],
+    })
+
+    assert text == '{"findings":[]}'
+
+
+def test_api_prompt_includes_bounded_file_bundle(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    source = repo / "app.py"
+    source.parent.mkdir()
+    source.write_text("print('secret-ish test data')\n")
+    worker = OpenAIResponsesAPIWorker(
+        model="gpt-test",
+        api_key_env="OPENAI_API_KEY",
+        api_base_url="https://api.openai.com/v1",
+        file_char_limit=10,
+    )
+
+    prompt = worker._prompt_with_files("Review", [source], repo)
+
+    assert "--- FILE: app.py ---" in prompt
+    assert "print('sec" in prompt
+    assert "FILE BUNDLE TRUNCATED" in prompt
+
+
 @pytest.mark.asyncio
 async def test_claude_model_option_is_before_prompt(tmp_path: Path) -> None:
     cmd = await ClaudeWorker(model="sonnet")._build_command("Prompt", tmp_path)
@@ -186,5 +223,6 @@ async def test_worker_pool_emits_worker_progress_events(tmp_path: Path) -> None:
         on_event=events.append,
     )
 
+    assert any("waiting for claude subagent" in event for event in events)
     assert any("claude reviewing 0 files" in event for event in events)
     assert any("claude returned 0 findings" in event for event in events)

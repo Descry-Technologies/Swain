@@ -14,6 +14,7 @@ from descry.memory.config import (
     SwainConfig,
     normalize_concurrency,
     normalize_worker_mode,
+    normalize_worker_runtime,
     setup_completed,
 )
 from descry.memory.store import MemoryStore
@@ -27,7 +28,11 @@ async def run_setup(
     worker_mode: str | None = None,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    claude_runtime: str | None = None,
+    codex_runtime: str | None = None,
     concurrency: str | None = None,
+    api_max_output_tokens: int | None = None,
+    api_file_char_limit: int | None = None,
     interactive: bool = True,
     init_profile: bool = True,
 ) -> SwainConfig:
@@ -38,34 +43,60 @@ async def run_setup(
     _render_worker_choices()
 
     mode = _choose_worker_mode(worker_mode, existing, interactive)
+    selected_claude_runtime = "cli"
     selected_claude_model = ""
     if mode in {"claude", "hybrid"}:
+        selected_claude_runtime = _choose_runtime(
+            "Claude",
+            existing.claude_runtime,
+            claude_runtime,
+            interactive,
+        )
         selected_claude_model = _choose_model(
             "Claude",
             existing.claude_model,
             claude_model,
             interactive,
+            runtime=selected_claude_runtime,
         )
+    selected_codex_runtime = "cli"
     selected_codex_model = ""
     if mode in {"codex", "hybrid"}:
+        selected_codex_runtime = _choose_runtime(
+            "Codex",
+            existing.codex_runtime,
+            codex_runtime,
+            interactive,
+        )
         selected_codex_model = _choose_model(
             "Codex",
             existing.codex_model,
             codex_model,
             interactive,
+            runtime=selected_codex_runtime,
         )
 
     _render_concurrency_choices()
     selected_concurrency = _choose_concurrency(concurrency, existing, interactive)
     max_concurrent, max_per_type = CONCURRENCY_PRESETS[selected_concurrency]
+    max_output_tokens = api_max_output_tokens or existing.api_max_output_tokens
+    file_char_limit = api_file_char_limit or existing.api_file_char_limit
 
     config = SwainConfig.completed(
         worker_mode=mode,
         claude_model=selected_claude_model,
         codex_model=selected_codex_model,
+        claude_runtime=selected_claude_runtime,
+        codex_runtime=selected_codex_runtime,
+        claude_api_key_env=existing.claude_api_key_env,
+        codex_api_key_env=existing.codex_api_key_env,
+        claude_api_base_url=existing.claude_api_base_url,
+        codex_api_base_url=existing.codex_api_base_url,
         concurrency=selected_concurrency,
         max_concurrent=max_concurrent,
         max_per_type=max_per_type,
+        api_max_output_tokens=max_output_tokens,
+        api_file_char_limit=file_char_limit,
     )
     config.save(store)
 
@@ -86,7 +117,8 @@ def _render_intro(repo_root: Path) -> None:
             "boundaries, secrets, SQL, and XSS.\n\n"
             "It reads your target repo, runs local deterministic checks first, "
             "then sends focused file copies to your own Claude and/or Codex "
-            "CLI workers when you run a real scan.\n\n"
+            "CLI workers when you run a real scan. Direct API workers are "
+            "available as an advanced option, but CLI is the main path.\n\n"
             "It writes memory to .swain/. Scans do not edit your app. "
             "`swain fix` drafts a patch for review; it does not apply it.",
             subtitle=str(repo_root),
@@ -115,6 +147,33 @@ def _render_worker_choices() -> None:
         "Keeps the workflow on one CLI. Uses Codex quota only.",
     )
     console.print(table)
+
+
+def _choose_runtime(
+    label: str,
+    existing: str,
+    value: str | None,
+    interactive: bool,
+) -> str:
+    if value:
+        return normalize_worker_runtime(value)
+    default = existing or "cli"
+    if not interactive:
+        return default
+
+    console.print()
+    console.print(f"[bold]{label} runtime[/bold]")
+    console.print(
+        "Use CLI unless you explicitly want API-key billing. CLI mode uses your "
+        f"local {label.lower()} command and account. API mode sends selected file "
+        "content inline to the provider API, needs an API key env var, and needs "
+        "an exact model id."
+    )
+    return Prompt.ask(
+        f"{label} runtime",
+        choices=["cli", "api"],
+        default=default,
+    )
 
 
 def _render_concurrency_choices() -> None:
@@ -162,6 +221,8 @@ def _choose_model(
     existing: str,
     value: str | None,
     interactive: bool,
+    *,
+    runtime: str,
 ) -> str:
     if value is not None:
         return "" if value == "default" else value.strip()
@@ -170,6 +231,14 @@ def _choose_model(
 
     console.print()
     console.print(f"[bold]{label} model[/bold]")
+    if runtime == "api":
+        console.print(
+            "API mode requires the exact model id accepted by the provider API. "
+            "Stronger models usually catch more cross-file issues, but they are "
+            "slower and spend more tokens."
+        )
+        return Prompt.ask(f"Exact {label} API model id", default=existing).strip()
+
     console.print(
         "Use the CLI default unless you already know the exact model id your "
         f"{label.lower()} CLI accepts. Bigger reasoning models usually catch "

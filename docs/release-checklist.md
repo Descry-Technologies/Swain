@@ -47,6 +47,7 @@ has the public demo path:
 ```bash
 sh -n install.sh
 uv run swain demo
+uv run swain update --source-dir /tmp/not-swain --check || true
 ```
 
 Expected:
@@ -54,6 +55,8 @@ Expected:
 - `swain demo` runs doctor, status, and a mock scan without Claude/Codex quota.
 - The final handoff says to open the TUI with `swain <demo-path>`.
 - The installer handoff says to run `swain` inside a project, not `uv run`.
+- `swain update` gives a clear managed-source message when no installer checkout
+  exists.
 
 ## CLI Smoke
 
@@ -73,6 +76,8 @@ Expected:
 
 - `setup` records worker mode, model defaults, and careful scan concurrency in
   `.swain/config.yaml`.
+- Direct API runtime can be configured with `--codex-runtime api` or
+  `--claude-runtime api`, but CLI runtime remains the default.
 - `doctor` reports repo/profile/playbook/package checks and worker locations.
 - `status` renders recent runs, ranks open findings, and prints a fix-first
   command when finding history exists.
@@ -110,6 +115,7 @@ Expected:
 - Asking `are we ready to ship?` gives a local launch-readiness answer.
 - `/scan` shows progress, finding narratives, a prioritization opinion, and a
   next action.
+- The TUI side rail shows task/subagent progress instead of a silent spinner.
 - `/feedback <id> fp` and `/fix <id>` are discoverable from the scan output.
 
 ## Demo Assets

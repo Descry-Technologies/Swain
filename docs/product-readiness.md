@@ -16,6 +16,10 @@ specific, low-friction, and useful even when Claude or Codex quota is unavailabl
   questions without needing an LLM call.
 - README explains the first-run TUI flow and the launch-risk surfaces Swain covers.
 - Public install is one command: `curl ... | sh`, then `swain` inside a repo.
+- `swain update` refreshes the managed source checkout and reinstalls the command
+  without PyPI.
+- Setup supports CLI runtime by default and direct API runtime as an advanced
+  path with explicit model ids and API key env vars.
 - `swain doctor` gives a preflight view of repo setup, playbooks, worker
   availability, quota/auth probes, and package hygiene.
 - Generated Python bytecode is ignored and no longer tracked as package content.
@@ -27,6 +31,8 @@ specific, low-friction, and useful even when Claude or Codex quota is unavailabl
   installed scans can load the same checks and demo as the source checkout.
 - First-run Textual smoke coverage verifies the TUI mounts, greets a fresh repo,
   and answers launch-readiness locally.
+- The TUI side rail shows scan phase, configured workers, active subagents,
+  completed/failed playbooks, and the latest worker event.
 - A release demo script exists for the preflight, first-run chat, scan,
   fix-draft, and feedback loop.
 - A release checklist captures automated gates, CLI smoke checks, real-worker

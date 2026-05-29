@@ -41,8 +41,9 @@ Swain writes project memory under `.swain/` in the target repo:
     schedule.yaml
 ```
 
-`config.yaml` records setup choices: Claude/Codex/hybrid mode, optional model
-overrides, and scan concurrency. The committable files are `config.yaml`,
+`config.yaml` records setup choices: Claude/Codex/hybrid mode, CLI vs direct API
+runtime per worker, optional model overrides, API key environment variable names,
+API prompt caps, and scan concurrency. The committable files are `config.yaml`,
 `profile.yaml`, `conventions.yaml`, and reviewed playbooks under
 `.swain/playbooks/active/`. The public demo also ships a checked-in
 `.swain/demo-history/` fixture so `swain status` can show the fix-first flow
@@ -57,9 +58,9 @@ reviewable diff.
 
 ## What Goes To Claude/Codex Workers
 
-When you run a real scan, Swain creates focused tasks from applicable playbooks
-and selected files. Those tasks are sent to local `claude` and/or `codex` CLI
-processes installed on your machine.
+When you run a real scan in the default CLI runtime, Swain creates focused tasks
+from applicable playbooks and selected files. Those tasks are sent to local
+`claude` and/or `codex` CLI processes installed on your machine.
 
 Worker prompts can include:
 
@@ -72,6 +73,12 @@ Worker prompts can include:
 Claude/Codex account, quota, telemetry, retention, and network behavior are
 controlled by those CLIs and their providers. Swain does not run a separate
 hosted analysis service in this source-first release.
+
+If you choose direct API runtime, Swain does not start the local CLI for that
+worker. It sends the playbook prompt and bounded selected source snippets
+directly to Anthropic or OpenAI using `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`.
+API mode requires an exact provider model id and is meant for advanced users who
+want API-key billing instead of local CLI subscriptions.
 
 ## What Never Gets Intentionally Sent
 

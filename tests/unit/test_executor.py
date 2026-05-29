@@ -70,6 +70,7 @@ async def test_executor_retries_timeouts_with_reduced_file_scope(
     result = await executor._run_task(task, playbook)
 
     assert result.report is not None
+    assert any("reduced file scope" in warning for warning in executor.task_warnings)
     assert pool.calls == [
         ["a.py", "b.py", "c.py", "d.py"],
         ["a.py", "b.py"],
@@ -104,4 +105,4 @@ async def test_executor_emits_retry_progress_events(tmp_path: Path) -> None:
 
     await executor._run_task(task, playbook, on_event=events.append)
 
-    assert any("retrying with 2 files" in event for event in events)
+    assert any("reduced file scope after timeout" in event for event in events)

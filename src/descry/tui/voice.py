@@ -82,18 +82,19 @@ _SEV_OPENERS = {
 _GREET_NO_PROJECT = [
     (
         "Hey. I'm in `{repo}`. I don't know this repo yet, so the first scan "
-        "will build a profile, then audit it."
+        "will build a profile, then audit it. I'll narrate the work as it goes."
     ),
     (
         "Hey. `{repo}` isn't initialized yet. Run /scan and I'll learn the "
-        "stack before I start calling out risk."
+        "stack before I start calling out risk. Nothing gets fixed behind your back."
     ),
 ]
 
 _GREET_FIRST_TIME = [
     (
         "Hey. First time with this repo. Run /scan and I'll check the risky "
-        "surfaces first."
+        "surfaces first. I'll show each worker call so you can see where time "
+        "and quota go."
     ),
     (
         "Hey. I haven't scanned this one yet. Run /scan and I'll start with "
@@ -247,12 +248,15 @@ class AgentVoice:
 
     def scan_start(self, playbook_count: int) -> str:
         opts = [
-            f"Running {playbook_count} check{'s' if playbook_count != 1 else ''}...",
+            f"Running {playbook_count} check{'s' if playbook_count != 1 else ''}. "
+            "I'll keep the lights on while the workers move.",
             (
                 f"On it. {playbook_count} "
-                f"check{'s' if playbook_count != 1 else ''} queued."
+                f"check{'s' if playbook_count != 1 else ''} queued. "
+                "Watch the subagents on the side."
             ),
-            f"Starting {playbook_count} check{'s' if playbook_count != 1 else ''}.",
+            f"Starting {playbook_count} check{'s' if playbook_count != 1 else ''}. "
+            "I'll call out failures instead of letting the scan go quiet.",
         ]
         return _RANDOM.choice(opts)
 
@@ -446,6 +450,7 @@ class AgentVoice:
             "/feedback <id> fp     teach me a false positive\n"
             "/feedback <id> fix    mark something fixed\n"
             "/setup                change Claude/Codex model setup\n"
+            "/update               update Swain from the source checkout\n"
             "/init                 rebuild the project profile\n\n"
             "You can also ask plain-English questions like 'what should I fix first?' "
             "or 'explain this auth issue'."

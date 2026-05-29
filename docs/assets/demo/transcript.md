@@ -17,7 +17,7 @@ swain doctor examples/launchpad-saas --no-probe-workers
 ┃ Check              ┃ Status   ┃ Detail                                                             ┃ Next step                                               ┃
 ┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
 │ repo               │ ok       │ <swain>/examples/launchpad-saas              │                                                         │
-│ setup              │ ok       │ hybrid (Claude: CLI default, Codex: CLI default); careful          │                                                         │
+│ setup              │ ok       │ hybrid (Claude CLI: CLI default, Codex CLI: CLI default); careful  │                                                         │
 │                    │          │ concurrency, max 1 at once                                         │                                                         │
 │ profile            │ ok       │ .swain/profile.yaml found                                          │                                                         │
 │ playbooks          │ ok       │ 7 applicable of 7 loaded                                           │                                                         │

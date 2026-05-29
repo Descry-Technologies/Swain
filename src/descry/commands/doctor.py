@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
 import yaml
 from rich.console import Console
 from rich.panel import Panel
@@ -47,7 +49,7 @@ async def collect_checks(
         _check_playbooks(repo_root),
         _check_generated_artifacts(repo_root),
     ]
-    checks.extend(await _check_workers(probe_workers=probe_workers))
+    checks.extend(await _check_workers(repo_root, probe_workers=probe_workers))
     return checks
 
 
@@ -148,26 +150,51 @@ def _check_playbooks(repo_root: Path) -> DoctorCheck:
     )
 
 
-async def _check_workers(*, probe_workers: bool) -> list[DoctorCheck]:
-    worker_specs = [
-        ("claude", ["claude", "--output-format", "text", "-p", "Reply OK"]),
-        (
-            "codex",
-            [
-                "codex",
-                "exec",
-                "--skip-git-repo-check",
-                "-s",
-                "read-only",
-                "Reply OK",
-            ],
-        ),
-    ]
-
+async def _check_workers(repo_root: Path, *, probe_workers: bool) -> list[DoctorCheck]:
+    config = _load_config_or_default(repo_root)
     checks: list[DoctorCheck] = []
-    for name, probe_cmd in worker_specs:
-        checks.append(await _check_worker(name, probe_cmd, probe_workers))
+    if config.uses_claude:
+        if config.claude_runtime == "api":
+            checks.append(
+                await _check_anthropic_api(config, probe_workers=probe_workers)
+            )
+        else:
+            checks.append(
+                await _check_worker(
+                    "claude",
+                    ["claude", "--output-format", "text", "-p", "Reply OK"],
+                    probe_workers,
+                )
+            )
+    if config.uses_codex:
+        if config.codex_runtime == "api":
+            checks.append(await _check_openai_api(config, probe_workers=probe_workers))
+        else:
+            checks.append(
+                await _check_worker(
+                    "codex",
+                    [
+                        "codex",
+                        "exec",
+                        "--skip-git-repo-check",
+                        "-s",
+                        "read-only",
+                        "Reply OK",
+                    ],
+                    probe_workers,
+                )
+            )
     return checks
+
+
+def _load_config_or_default(repo_root: Path) -> SwainConfig:
+    config_path = repo_root / ".swain" / "config.yaml"
+    if not config_path.exists():
+        return SwainConfig()
+    try:
+        return SwainConfig.from_dict(yaml.safe_load(config_path.read_text()) or {})
+    except (OSError, ValueError, yaml.YAMLError):
+        return SwainConfig()
 
 
 async def _check_worker(
@@ -218,6 +245,126 @@ async def _probe_command(cmd: list[str]) -> tuple[bool, str]:
 
     output = (stdout + stderr).decode("utf-8", errors="replace").strip()
     return proc.returncode == 0, _first_line(output)
+
+
+async def _check_anthropic_api(
+    config: SwainConfig,
+    *,
+    probe_workers: bool,
+) -> DoctorCheck:
+    if not config.claude_model:
+        return DoctorCheck(
+            "claude api",
+            "warn",
+            "Claude API runtime selected but no model is configured",
+            "Run `swain setup` and enter an Anthropic model id.",
+        )
+    key = os.environ.get(config.claude_api_key_env)
+    if not key:
+        return DoctorCheck(
+            "claude api",
+            "warn",
+            f"{config.claude_api_key_env} is not set",
+            f"Export `{config.claude_api_key_env}` or switch Claude back to CLI.",
+        )
+    if not probe_workers:
+        return DoctorCheck(
+            "claude api",
+            "ok",
+            f"{config.claude_model}; key env present; probe skipped",
+            "Run `swain doctor --probe-workers` to check auth/quota.",
+        )
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(
+                f"{config.claude_api_base_url}/v1/messages",
+                headers={
+                    "x-api-key": key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": config.claude_model,
+                    "max_tokens": 8,
+                    "messages": [{"role": "user", "content": "Reply OK"}],
+                },
+            )
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        return DoctorCheck(
+            "claude api",
+            "warn",
+            f"HTTP {exc.response.status_code}: {exc.response.text[:140]}",
+            "Check Anthropic API auth, model id, quota, and rate limits.",
+        )
+    except httpx.HTTPError as exc:
+        return DoctorCheck(
+            "claude api",
+            "warn",
+            str(exc)[:180],
+            "Check network access and Anthropic API settings.",
+        )
+    return DoctorCheck("claude api", "ok", f"{config.claude_model} responded")
+
+
+async def _check_openai_api(
+    config: SwainConfig,
+    *,
+    probe_workers: bool,
+) -> DoctorCheck:
+    if not config.codex_model:
+        return DoctorCheck(
+            "codex api",
+            "warn",
+            "Codex API runtime selected but no model is configured",
+            "Run `swain setup` and enter an OpenAI model id.",
+        )
+    key = os.environ.get(config.codex_api_key_env)
+    if not key:
+        return DoctorCheck(
+            "codex api",
+            "warn",
+            f"{config.codex_api_key_env} is not set",
+            f"Export `{config.codex_api_key_env}` or switch Codex back to CLI.",
+        )
+    if not probe_workers:
+        return DoctorCheck(
+            "codex api",
+            "ok",
+            f"{config.codex_model}; key env present; probe skipped",
+            "Run `swain doctor --probe-workers` to check auth/quota.",
+        )
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(
+                f"{config.codex_api_base_url}/responses",
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": config.codex_model,
+                    "input": "Reply OK",
+                    "max_output_tokens": 8,
+                    "store": False,
+                },
+            )
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        return DoctorCheck(
+            "codex api",
+            "warn",
+            f"HTTP {exc.response.status_code}: {exc.response.text[:140]}",
+            "Check OpenAI API auth, model id, quota, and rate limits.",
+        )
+    except httpx.HTTPError as exc:
+        return DoctorCheck(
+            "codex api",
+            "warn",
+            str(exc)[:180],
+            "Check network access and OpenAI API settings.",
+        )
+    return DoctorCheck("codex api", "ok", f"{config.codex_model} responded")
 
 
 def _check_generated_artifacts(repo_root: Path) -> DoctorCheck:

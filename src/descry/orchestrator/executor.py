@@ -147,12 +147,11 @@ class Executor:
             retry_task = task.model_copy(
                 update={"files": task.files[: max(1, len(task.files) // 2)]},
             )
-            if on_event:
-                on_event(
-                    f"{task.playbook_id}: retrying with "
-                    f"{len(retry_task.files)} file"
-                    f"{'s' if len(retry_task.files) != 1 else ''}"
-                )
+            self._record_warning(
+                f"{task.playbook_id} retrying with reduced file scope after "
+                f"{self._result_reason(result)}",
+                on_event=on_event,
+            )
             retry_prompt = self._build_prompt(playbook, retry_task)
             retry_files = [self.repo_root / f for f in retry_task.files]
             result = await self.pool.run_task(
@@ -163,6 +162,15 @@ class Executor:
                 on_event=on_event,
             )
         return result
+
+    def _result_reason(self, result: WorkerResult) -> str:
+        if result.timed_out:
+            return "timeout"
+        if result.parse_error:
+            return f"parse error: {result.parse_error[:100]}"
+        if result.exit_code != 0:
+            return f"exit code {result.exit_code}"
+        return "empty worker report"
 
     def _record_warning(
         self,

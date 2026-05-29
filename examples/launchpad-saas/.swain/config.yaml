@@ -6,6 +6,15 @@ workers:
   max_concurrent: 1
   max_per_type: 1
   claude:
+    runtime: cli
     model: ''
+    api_key_env: ANTHROPIC_API_KEY
+    api_base_url: https://api.anthropic.com
   codex:
+    runtime: cli
     model: ''
+    api_key_env: OPENAI_API_KEY
+    api_base_url: https://api.openai.com/v1
+  api:
+    max_output_tokens: 2048
+    file_char_limit: 120000
