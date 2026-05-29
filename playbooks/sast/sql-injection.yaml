@@ -1,0 +1,65 @@
+id: sast.sql-injection
+version: 1
+author: descry
+description: Detect SQL injection vulnerabilities across Python, TypeScript, and common ORMs.
+worker: claude
+output_schema: finding.v1
+timeout_s: 120
+applies_when: {}
+files:
+  include:
+    - "**/*.ts"
+    - "**/*.js"
+    - "**/*.py"
+    - "**/api/**"
+    - "**/server/**"
+    - "**/routes/**"
+    - "**/db/**"
+    - "**/lib/**"
+  exclude:
+    - "**/node_modules/**"
+    - "**/*.test.*"
+    - "**/*.spec.*"
+    - "**/migrations/**"
+    - "**/dist/**"
+  max_files: 60
+prompt: |
+  {{learned_context}}
+
+  You are auditing server-side code for SQL injection vulnerabilities.
+
+  WHAT TO FIND:
+  1. Raw SQL queries built with string concatenation or template literals containing user input
+     e.g., `SELECT * FROM users WHERE id = ${req.params.id}`
+  2. Supabase .rpc() calls with unsanitized user-controlled parameters
+  3. Prisma raw queries (prisma.$queryRaw, prisma.$executeRaw) with interpolated user input
+  4. Drizzle sql`` template literal with user-controlled values not using placeholder binding
+  5. Python: cursor.execute() with % formatting or .format() with user input
+  6. Knex raw() queries with string interpolation
+
+  WHAT IS SAFE (do NOT report):
+  - Parameterized queries: query('SELECT * FROM users WHERE id = $1', [userId])
+  - ORM methods that use parameterization by default (prisma.user.findMany({ where: { id } }))
+  - Supabase client .select().eq('id', userId)
+  - Raw queries in migration files (these are developer-written, not user-influenced)
+
+  ACCEPTED PATTERNS IN THIS REPO:
+  {{accepted_patterns}}
+
+  For each finding:
+  - Identify the exact vulnerable query
+  - Trace where the user-controlled value comes from (req.params, req.body, URL query, etc.)
+  - Identify what data is at risk (PII, credentials, all records, etc.)
+  - Provide the parameterized version as the fix
+
+  FILES TO AUDIT:
+  {{file_list}}
+
+  severity=critical if the endpoint is unauthenticated and exposes sensitive data
+  severity=high if authenticated but can access other users' data
+  severity=medium if limited to own data or read-only
+tests:
+  - fixture: sql_string_concat.ts
+    expect_finding_count: 1
+  - fixture: sql_parameterized.ts
+    expect_finding_count: 0

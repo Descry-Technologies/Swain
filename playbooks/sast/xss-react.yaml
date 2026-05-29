@@ -1,0 +1,67 @@
+id: sast.xss.react
+version: 1
+author: descry
+description: Detect XSS vulnerabilities in React and Next.js applications.
+worker: claude
+output_schema: finding.v1
+timeout_s: 120
+applies_when:
+  any_dep:
+    - react
+    - react-dom
+    - next
+files:
+  include:
+    - "**/*.tsx"
+    - "**/*.jsx"
+    - "**/*.ts"
+    - "**/*.js"
+  exclude:
+    - "**/node_modules/**"
+    - "**/*.test.*"
+    - "**/*.spec.*"
+    - "**/__tests__/**"
+    - "**/dist/**"
+    - "**/.next/**"
+  max_files: 60
+prompt: |
+  {{learned_context}}
+
+  You are auditing a React/Next.js application for XSS (Cross-Site Scripting) vulnerabilities.
+
+  WHAT TO FIND:
+  1. dangerouslySetInnerHTML used with unsanitized user input or external data
+  2. eval() or new Function() with dynamic content
+  3. document.write() or innerHTML assignments with user-controlled data
+  4. URL parameters injected into href, src, or action attributes without validation
+  5. User-controlled data rendered without escaping in template literals inserted into DOM
+  6. next/link href with user-controlled values (javascript: protocol injection)
+  7. React ref.current.innerHTML assignments with external data
+
+  WHAT TO IGNORE:
+  - dangerouslySetInnerHTML with static string literals
+  - dangerouslySetInnerHTML wrapped by a proven sanitizer (DOMPurify, sanitize-html, etc.)
+  - Server-side rendering where content never reaches the browser as raw HTML
+
+  ACCEPTED PATTERNS IN THIS REPO:
+  {{accepted_patterns}}
+
+  For each finding, trace the data flow:
+  - Where does the user-controlled data originate? (URL param, form input, API response, database)
+  - How does it reach the dangerous sink?
+  - What is the exploit scenario?
+  - Is this endpoint exposed to unauthenticated users?
+
+  FILES TO AUDIT:
+  {{file_list}}
+
+  Report findings with:
+  - severity: high if user can inject arbitrary HTML/script; medium if limited injection
+  - confidence: how certain you are the data is user-controlled and unsanitized
+  - data_flow: the taint path from source to sink
+  - remediation: specific fix (which sanitizer, which escaping function)
+tests:
+  - fixture: xss_dangerously_set_raw.tsx
+    expect_finding_count: 1
+  - fixture: xss_domepurify_wrapped.tsx
+    expect_finding_count: 0

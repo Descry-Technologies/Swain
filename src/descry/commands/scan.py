@@ -1,0 +1,199 @@
+"""descry scan — run a mission."""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime
+from pathlib import Path
+
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+
+from descry.memory.store import MemoryStore
+from descry.memory.profile import ProjectProfile
+from descry.memory.conventions import ConventionStore
+from descry.memory.calibration import CalibrationStore
+from descry.memory.scheduler import ScheduleStore
+from descry.scanners.inventory import RepoInventory
+from descry.scanners.secrets import SecretsScanner
+from descry.playbooks.loader import PlaybookLoader
+from descry.orchestrator.planner import Planner
+from descry.orchestrator.executor import Executor
+from descry.orchestrator.pool import WorkerPool
+from descry.workers.claude_worker import ClaudeWorker
+from descry.workers.codex_worker import CodexWorker
+from descry.workers.mock_worker import MockWorker
+from descry.models import Finding, Severity
+
+console = Console()
+
+SEVERITY_COLOR = {
+    Severity.CRITICAL: "bold red",
+    Severity.HIGH: "red",
+    Severity.MEDIUM: "yellow",
+    Severity.LOW: "cyan",
+    Severity.INFO: "dim",
+}
+
+
+async def run_scan(
+    repo_root: Path,
+    trigger: str = "manual",
+    output: str = "terminal",
+    out_file: str | None = None,
+    mock: bool = False,
+) -> None:
+    store = MemoryStore(repo_root)
+
+    if not (store.root / "profile.yaml").exists():
+        console.print("[yellow]No .descry/profile.yaml found. Run [bold]descry init[/bold] first.[/yellow]")
+        return
+
+    # Load memory
+    profile = ProjectProfile.load(store)
+    conventions = ConventionStore(store)
+    calibration = CalibrationStore(store)
+    schedule = ScheduleStore(store)
+
+    # Run deterministic scanners first
+    console.print("[dim]Running deterministic scanners...[/dim]")
+    inventory = RepoInventory.scan(repo_root, prev_deps=profile.deps)
+    secret_hits = await SecretsScanner().run(repo_root)
+
+    if secret_hits:
+        console.print(f"[bold red]🚨 {len(secret_hits)} potential secret(s) detected by static scan![/bold red]")
+
+    # Build worker pool
+    pool = WorkerPool(max_concurrent=4, max_per_type=2)
+    if mock:
+        pool.register(MockWorker())
+    else:
+        pool.register(ClaudeWorker())
+        pool.register(CodexWorker())
+        if not MockWorker().is_available():
+            pool.register(MockWorker())  # always have fallback
+
+    # Load playbooks
+    builtin_dir = Path(__file__).parent.parent.parent.parent / "playbooks"
+    user_pb_dir = store.root / "playbooks"
+    loader = PlaybookLoader(builtin_dir=builtin_dir, user_dir=user_pb_dir)
+
+    # Plan mission
+    planner = Planner(loader, schedule)
+    mission = planner.plan(trigger, inventory)
+
+    console.print(f"[dim]Mission {mission.id}: {len(mission.tasks)} playbook(s) to run[/dim]")
+
+    findings: list[Finding] = []
+
+    def on_finding(f: Finding) -> None:
+        findings.append(f)
+        if output == "terminal":
+            color = SEVERITY_COLOR.get(f.severity, "white")
+            console.print(f"  [{color}]{f.severity.upper()}[/{color}] {f.title} ({f.evidence.file}:{f.evidence.line_start or '?'})")
+
+    # Execute
+    executor = Executor(pool, loader, profile, conventions, calibration, repo_root)
+    findings = await executor.execute(mission, on_finding=on_finding if output == "terminal" else None)
+
+    # Increment run count; check if schedule recompute needed
+    count = schedule.increment_run_count()
+    if schedule.needs_recompute():
+        console.print("[dim]Recomputing schedule based on run history...[/dim]")
+        # Simple heuristic recompute — full synthesizer in Phase 2
+        schedule.apply_recompute(schedule._data.get("schedules", []))
+
+    # Save run to history
+    _save_history(store, mission.id, findings)
+
+    # Output
+    if output == "terminal":
+        _render_terminal(findings, secret_hits)
+    elif output == "json":
+        result = _to_json(findings, secret_hits, mission.id)
+        if out_file:
+            Path(out_file).write_text(json.dumps(result, indent=2, default=str))
+        else:
+            console.print_json(json.dumps(result, default=str))
+    elif output == "markdown":
+        md = _to_markdown(findings, secret_hits, mission.id)
+        if out_file:
+            Path(out_file).write_text(md)
+        else:
+            console.print(md)
+
+
+def _render_terminal(findings: list[Finding], secret_hits: list) -> None:
+    console.print()
+    if not findings and not secret_hits:
+        console.print(Panel.fit("[green]✓ No findings[/green]", title="Descry Scan Complete"))
+        return
+
+    table = Table(title=f"Descry Findings ({len(findings)} total)", show_lines=True)
+    table.add_column("Severity", style="bold", width=10)
+    table.add_column("Rule", width=30)
+    table.add_column("Title", width=40)
+    table.add_column("File", width=30)
+    table.add_column("Conf.", width=6)
+
+    for f in sorted(findings, key=lambda x: list(Severity).index(x.severity)):
+        color = SEVERITY_COLOR.get(f.severity, "white")
+        table.add_row(
+            f"[{color}]{f.severity.upper()}[/{color}]",
+            f.rule,
+            f.title,
+            f"{f.evidence.file}:{f.evidence.line_start or '?'}",
+            f"{f.confidence:.0%}",
+        )
+
+    console.print(table)
+
+    if secret_hits:
+        console.print(f"\n[bold red]Static secret scan: {len(secret_hits)} hit(s)[/bold red]")
+        for h in secret_hits:
+            console.print(f"  🔑 {h.rule} in {h.file}:{h.line}")
+
+
+def _to_json(findings: list[Finding], secret_hits: list, run_id: str) -> dict:
+    return {
+        "run_id": run_id,
+        "timestamp": datetime.utcnow().isoformat(),
+        "finding_count": len(findings),
+        "findings": [f.model_dump() for f in findings],
+        "secret_scan_hits": len(secret_hits),
+    }
+
+
+def _to_markdown(findings: list[Finding], secret_hits: list, run_id: str) -> str:
+    lines = [f"# Descry Security Report\n", f"**Run ID**: `{run_id}`  ", f"**Date**: {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC\n"]
+    if not findings and not secret_hits:
+        lines.append("\n✅ No findings.\n")
+        return "\n".join(lines)
+    for sev in Severity:
+        group = [f for f in findings if f.severity == sev]
+        if not group:
+            continue
+        lines.append(f"\n## {sev.upper()} ({len(group)})\n")
+        for f in group:
+            lines.append(f"### {f.title}")
+            lines.append(f"- **Rule**: `{f.rule}`")
+            lines.append(f"- **File**: `{f.evidence.file}:{f.evidence.line_start or '?'}`")
+            lines.append(f"- **Confidence**: {f.confidence:.0%}")
+            if f.description:
+                lines.append(f"\n{f.description}\n")
+            if f.remediation.summary:
+                lines.append(f"\n**Fix**: {f.remediation.summary}\n")
+    return "\n".join(lines)
+
+
+def _save_history(store: MemoryStore, run_id: str, findings: list[Finding]) -> None:
+    import json as _json
+    record = {
+        "run_id": run_id,
+        "timestamp": datetime.utcnow().isoformat(),
+        "finding_count": len(findings),
+        "severities": {s.value: sum(1 for f in findings if f.severity == s) for s in Severity},
+    }
+    path = store.history_dir / f"{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}-{run_id}.json"
+    path.write_text(_json.dumps(record, indent=2))

@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://descry.dev/schemas/playbook.v1.json",
+  "title": "Playbook",
+  "type": "object",
+  "required": ["id", "version", "worker", "output_schema", "prompt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9._-]+$" },
+    "version": { "type": "integer", "minimum": 1 },
+    "author": { "type": "string" },
+    "description": { "type": "string" },
+    "worker": { "type": "string", "enum": ["claude", "codex", "semgrep", "gitleaks", "osv", "any"] },
+    "output_schema": { "type": "string", "const": "finding.v1" },
+    "timeout_s": { "type": "integer", "default": 120 },
+    "generated": { "type": "boolean", "default": false, "description": "True if synthesized by Descry, not human-authored" },
+    "shadow_runs_required": {
+      "type": "integer",
+      "default": 0,
+      "description": "For generated playbooks: shadow runs before activation"
+    },
+    "applies_when": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "any_dep": { "type": "array", "items": { "type": "string" } },
+        "file_glob": { "type": "array", "items": { "type": "string" } },
+        "languages": { "type": "array", "items": { "type": "string" } },
+        "has_routes": { "type": "boolean" },
+        "has_auth": { "type": "boolean" },
+        "has_payments": { "type": "boolean" }
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include": { "type": "array", "items": { "type": "string" } },
+        "exclude": { "type": "array", "items": { "type": "string" } },
+        "max_files": { "type": "integer", "default": 50 }
+      }
+    },
+    "prompt": { "type": "string", "description": "Jinja2 template. Receives: learned_context, file_list, accepted_patterns." },
+    "prompt_injection_guards": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Instructions prepended to neutralize adversarial repo content"
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fixture", "expect_finding_count"],
+        "properties": {
+          "fixture": { "type": "string" },
+          "expect_finding_count": { "type": "integer" },
+          "expect_rules": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

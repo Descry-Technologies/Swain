@@ -1,0 +1,80 @@
+"""Load and validate playbooks from disk."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import yaml
+from jsonschema import ValidationError, validate
+
+
+class PlaybookLoader:
+    def __init__(self, builtin_dir: Path, user_dir: Path | None = None) -> None:
+        self.builtin_dir = builtin_dir
+        self.user_dir = user_dir
+        self._schema: dict | None = None
+
+    def _load_schema(self) -> dict:
+        if self._schema is None:
+            schema_path = Path(__file__).parent.parent.parent.parent / "schemas" / "playbook.v1.json"
+            if schema_path.exists():
+                import json
+                self._schema = json.loads(schema_path.read_text())
+            else:
+                self._schema = {}
+        return self._schema
+
+    def load_all(self) -> list[dict[str, Any]]:
+        playbooks = []
+        dirs = [self.builtin_dir]
+        if self.user_dir:
+            # User playbooks override built-ins with same ID
+            dirs.extend([
+                self.user_dir / "active",
+                self.user_dir / "generated",
+            ])
+        for d in dirs:
+            if not d.exists():
+                continue
+            for f in sorted(d.rglob("*.yaml")):
+                try:
+                    pb = yaml.safe_load(f.read_text())
+                    if pb and isinstance(pb, dict):
+                        self._validate(pb, f)
+                        playbooks.append(pb)
+                except Exception as e:
+                    print(f"[descry] Warning: could not load playbook {f.name}: {e}")
+        # Deduplicate: user playbooks win over built-ins
+        seen: dict[str, dict] = {}
+        for pb in playbooks:
+            seen[pb.get("id", "")] = pb
+        return list(seen.values())
+
+    def _validate(self, pb: dict, path: Path) -> None:
+        schema = self._load_schema()
+        if not schema:
+            return
+        try:
+            validate(instance=pb, schema=schema)
+        except ValidationError as e:
+            raise ValueError(f"Invalid playbook {path.name}: {e.message}") from e
+
+    def filter_applicable(self, playbooks: list[dict], inventory: Any) -> list[dict]:
+        """Return playbooks that apply to the current repo inventory."""
+        result = []
+        for pb in playbooks:
+            cond = pb.get("applies_when", {})
+            if not cond:
+                result.append(pb)
+                continue
+            deps_lower = {d.lower() for d in (inventory.deps or [])}
+            any_dep = cond.get("any_dep", [])
+            if any_dep and not any(d.lower() in deps_lower for d in any_dep):
+                continue
+            if cond.get("has_auth") and not inventory.has_auth:
+                continue
+            if cond.get("has_payments") and not inventory.has_payments:
+                continue
+            result.append(pb)
+        return result
