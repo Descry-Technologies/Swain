@@ -1,0 +1,111 @@
+/* Descry TUI theme */
+
+Screen {
+    background: #0d0d0d;
+}
+
+#app-grid {
+    layout: grid;
+    grid-size: 2;
+    grid-columns: 3fr 1fr;
+    grid-rows: 1fr auto auto;
+}
+
+#chat-panel {
+    background: #111111;
+    border-right: solid #222222;
+    padding: 0 1;
+}
+
+#sidebar {
+    background: #0a0a0a;
+    padding: 1;
+    border-right: solid #222222;
+}
+
+#sidebar-title {
+    color: #00d4aa;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+.sidebar-label {
+    color: #666666;
+    text-style: bold;
+}
+
+.sidebar-value {
+    color: #cccccc;
+    margin-bottom: 1;
+}
+
+#input-row {
+    column-span: 2;
+    background: #1a1a1a;
+    border-top: solid #222222;
+    height: 3;
+    padding: 0 1;
+}
+
+#message-input {
+    background: #1a1a1a;
+    border: none;
+    color: #eeeeee;
+    padding: 0 1;
+}
+
+#message-input:focus {
+    border: none;
+    outline: none;
+}
+
+#footer {
+    column-span: 2;
+    background: #0a0a0a;
+    border-top: solid #1a1a1a;
+    height: 1;
+    padding: 0 1;
+    color: #444444;
+}
+
+#status-bar {
+    column-span: 2;
+    background: #0a0a0a;
+    border-bottom: solid #222222;
+    height: 1;
+    padding: 0 1;
+}
+
+ChatLog {
+    background: #111111;
+    scrollbar-background: #1a1a1a;
+    scrollbar-color: #333333;
+}
+
+.msg-agent {
+    color: #00d4aa;
+    text-style: bold;
+    margin-top: 1;
+}
+
+.msg-user {
+    color: #666666;
+    margin-top: 1;
+}
+
+.msg-body {
+    color: #cccccc;
+    margin-left: 2;
+    margin-bottom: 1;
+}
+
+.severity-critical { color: #ff4444; text-style: bold; }
+.severity-high     { color: #ff8c00; text-style: bold; }
+.severity-medium   { color: #ffd700; }
+.severity-low      { color: #4fc3f7; }
+.severity-info     { color: #666666; }
+
+.thinking {
+    color: #444444;
+    text-style: italic;
+}

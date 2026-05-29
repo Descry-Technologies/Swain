@@ -1,19 +1,21 @@
-"""Descry CLI — typer-based entry point."""
+"""Descry CLI — `descry` alone opens the TUI; subcommands for non-interactive use."""
 
 from __future__ import annotations
 
 import asyncio
-import json
-from datetime import datetime
+import sys
 from pathlib import Path
 
 import typer
-from rich.console import Console
-from rich.table import Table
 from rich import print as rprint
 
-app = typer.Typer(name="descry", help="Autonomous AI security lead for your codebase.", no_args_is_help=True)
-console = Console()
+# no_args_is_help=False so `descry` alone falls through to the TUI callback
+app = typer.Typer(
+    name="descry",
+    help="Autonomous AI security lead for your codebase.",
+    no_args_is_help=False,
+    invoke_without_command=True,
+)
 
 
 def _get_repo_root(path: str | None) -> Path:
@@ -22,6 +24,19 @@ def _get_repo_root(path: str | None) -> Path:
         typer.echo(f"Path not found: {root}", err=True)
         raise typer.Exit(1)
     return root.resolve()
+
+
+@app.callback(invoke_without_command=True)
+def default(
+    ctx: typer.Context,
+    path: str = typer.Argument(None, help="Repo path — opens TUI for that project"),
+) -> None:
+    """Open the interactive TUI. Pass a repo path to pre-load a project."""
+    if ctx.invoked_subcommand is not None:
+        return
+    from descry.tui.app import DescryApp
+    repo = _get_repo_root(path)
+    DescryApp(repo_path=repo).run()
 
 
 @app.command()
