@@ -16,6 +16,7 @@ app = typer.Typer(
     no_args_is_help=False,
     invoke_without_command=True,
 )
+daemon_app = typer.Typer(help="Install and control Swain's user daemon.")
 
 _COMMAND_NAMES = {
     "init",
@@ -25,10 +26,14 @@ _COMMAND_NAMES = {
     "status",
     "doctor",
     "demo",
+    "daemon",
     "setup",
     "update",
     "version",
+    "watch",
 }
+
+app.add_typer(daemon_app, name="daemon")
 
 
 def _get_repo_root(path: str | None) -> Path:
@@ -255,6 +260,81 @@ def status(
     from descry.commands.status import run_status
 
     asyncio.run(run_status(_get_repo_root(path)))
+
+
+@app.command()
+def watch(
+    path: str = typer.Argument(None, help="Repo path"),
+    interval: int = typer.Option(
+        30,
+        "--interval",
+        "-i",
+        help="Git polling interval in seconds.",
+    ),
+    once: bool = typer.Option(
+        False,
+        "--once",
+        help="Poll once and exit. Useful for tests and diagnostics.",
+    ),
+    mock: bool = typer.Option(
+        False,
+        "--mock",
+        help="Use mock worker when a change triggers recon.",
+    ),
+) -> None:
+    """Watch git state and trigger scheduled recon when tracked files change."""
+    from descry.commands.watch import run_watch
+
+    asyncio.run(
+        run_watch(
+            _get_repo_root(path),
+            interval_s=interval,
+            once=once,
+            mock=mock,
+        )
+    )
+
+
+@daemon_app.command("install")
+def daemon_install(
+    path: str = typer.Argument(None, help="Repo path"),
+    interval: int = typer.Option(
+        30,
+        "--interval",
+        "-i",
+        help="Git polling interval in seconds.",
+    ),
+) -> None:
+    """Install a Linux systemd user service for `swain watch`."""
+    from descry.commands.daemon import install_daemon
+
+    install_daemon(_get_repo_root(path), interval_s=interval)
+
+
+@daemon_app.command("start")
+def daemon_start(path: str = typer.Argument(None, help="Repo path")) -> None:
+    """Start the installed Swain watch service."""
+    from descry.commands.daemon import start_daemon
+
+    if not start_daemon(_get_repo_root(path)):
+        raise typer.Exit(1)
+
+
+@daemon_app.command("stop")
+def daemon_stop(path: str = typer.Argument(None, help="Repo path")) -> None:
+    """Stop the installed Swain watch service."""
+    from descry.commands.daemon import stop_daemon
+
+    if not stop_daemon(_get_repo_root(path)):
+        raise typer.Exit(1)
+
+
+@daemon_app.command("status")
+def daemon_status_cmd(path: str = typer.Argument(None, help="Repo path")) -> None:
+    """Show systemd and local watch state for this repo."""
+    from descry.commands.daemon import daemon_status
+
+    daemon_status(_get_repo_root(path))
 
 
 @app.command()

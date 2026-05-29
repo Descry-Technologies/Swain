@@ -2,6 +2,7 @@
 
 from descry.memory.calibration import CalibrationStore
 from descry.memory.conventions import ConventionStore
+from descry.memory.coworker import CoworkerMemory
 from descry.memory.profile import ProjectProfile
 from descry.memory.scheduler import ScheduleStore
 from descry.memory.store import MemoryStore
@@ -12,4 +13,5 @@ __all__ = [
     "ConventionStore",
     "CalibrationStore",
     "ScheduleStore",
+    "CoworkerMemory",
 ]

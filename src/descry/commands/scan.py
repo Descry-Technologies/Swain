@@ -5,25 +5,17 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from descry.memory.calibration import CalibrationStore
-from descry.memory.config import SwainConfig
-from descry.memory.conventions import ConventionStore
-from descry.memory.profile import ProjectProfile
-from descry.memory.scheduler import ScheduleStore
+from descry.memory.coworker import DecisionRecord, FixQueueItem
 from descry.memory.store import MemoryStore
 from descry.models import Finding, Severity
-from descry.orchestrator.executor import Executor
-from descry.orchestrator.planner import Planner
-from descry.playbooks.loader import PlaybookLoader
-from descry.resources import builtin_playbooks_dir
-from descry.scanners.inventory import RepoInventory
-from descry.scanners.secrets import SecretsScanner
-from descry.workers.configured_pool import build_worker_pool
+from descry.orchestrator.lead import LeadOrchestrationError, LeadOrchestrator
+from descry.scanners.secrets import SecretHit
 
 console = Console()
 
@@ -55,89 +47,45 @@ async def run_scan(
         )
         return
 
-    store = MemoryStore(repo_root)
-
-    # Load memory
-    profile = ProjectProfile.load(store)
-    conventions = ConventionStore(store)
-    calibration = CalibrationStore(store)
-    schedule = ScheduleStore(store)
-
-    # Run deterministic scanners first
-    console.print("[dim]Running deterministic scanners...[/dim]")
-    inventory = RepoInventory.scan(repo_root, prev_deps=profile.deps)
-    secret_hits = await SecretsScanner().run(repo_root)
-
-    if secret_hits:
-        console.print(
-            f"[bold red]🚨 {len(secret_hits)} potential secret(s) "
-            "detected by static scan![/bold red]"
+    lead = LeadOrchestrator(repo_root)
+    try:
+        result = await lead.run_recon(
+            trigger=trigger,
+            objective="manual scan",
+            mock=mock,
+            on_event=_terminal_event if output == "terminal" else None,
         )
-
-    # Build worker pool from first-run setup.
-    config = SwainConfig.load(store)
-    if output == "terminal":
-        if mock:
-            console.print("[dim]Worker mode: mock offline demo[/dim]")
-        else:
-            console.print(f"[dim]Worker mode: {config.worker_summary()}[/dim]")
-    pool = build_worker_pool(config, mock=mock)
-
-    # Load playbooks
-    user_pb_dir = store.root / "playbooks"
-    loader = PlaybookLoader(builtin_dir=builtin_playbooks_dir(), user_dir=user_pb_dir)
-
-    # Plan mission
-    planner = Planner(loader, schedule)
-    mission = planner.plan(trigger, inventory)
-
-    console.print(
-        f"[dim]Mission {mission.id}: {len(mission.tasks)} "
-        "playbook(s) to run[/dim]"
-    )
-
-    findings: list[Finding] = []
-
-    def on_finding(f: Finding) -> None:
-        findings.append(f)
-        if output == "terminal":
-            color = SEVERITY_COLOR.get(f.severity, "white")
-            console.print(
-                f"  [{color}]{f.severity.upper()}[/{color}] {f.title} "
-                f"({f.evidence.file}:{f.evidence.line_start or '?'})"
-            )
-
-    # Execute
-    executor = Executor(pool, loader, profile, conventions, calibration, repo_root)
-    progress_event = _terminal_event if output == "terminal" else None
-    findings = await executor.execute(
-        mission,
-        on_finding=on_finding if output == "terminal" else None,
-        on_event=progress_event,
-    )
-    task_warnings = executor.task_warnings
-
-    # Increment run count; check if schedule recompute needed
-    schedule.increment_run_count()
-    if schedule.needs_recompute():
-        console.print("[dim]Recomputing schedule based on run history...[/dim]")
-        # Simple heuristic recompute — full synthesizer in Phase 2
-        schedule.apply_recompute(schedule._data.get("schedules", []))
-
-    # Save run to history
-    _save_history(store, mission.id, findings)
+    except LeadOrchestrationError as exc:
+        console.print(f"[yellow]{exc}[/yellow]")
+        return
 
     # Output
     if output == "terminal":
-        _render_terminal(findings, secret_hits, task_warnings)
+        _render_terminal(result.findings, result.secret_hits, result.warnings)
+        _render_decisions(result.decisions)
+        _render_fix_queue(result.fix_queue)
     elif output == "json":
-        result = _to_json(findings, secret_hits, mission.id, task_warnings)
+        payload = _to_json(
+            result.findings,
+            result.secret_hits,
+            result.mission_id,
+            result.warnings,
+            decisions=result.decisions,
+            fix_queue=result.fix_queue,
+        )
         if out_file:
-            Path(out_file).write_text(json.dumps(result, indent=2, default=str))
+            Path(out_file).write_text(json.dumps(payload, indent=2, default=str))
         else:
-            console.print_json(json.dumps(result, default=str))
+            console.print_json(json.dumps(payload, default=str))
     elif output == "markdown":
-        md = _to_markdown(findings, secret_hits, mission.id, task_warnings)
+        md = _to_markdown(
+            result.findings,
+            result.secret_hits,
+            result.mission_id,
+            result.warnings,
+            decisions=result.decisions,
+            fix_queue=result.fix_queue,
+        )
         if out_file:
             Path(out_file).write_text(md)
         else:
@@ -146,7 +94,7 @@ async def run_scan(
 
 def _render_terminal(
     findings: list[Finding],
-    secret_hits: list,
+    secret_hits: list[SecretHit],
     task_warnings: list[str] | None = None,
 ) -> None:
     task_warnings = task_warnings or []
@@ -200,13 +148,50 @@ def _render_terminal(
             console.print(f"  ⚠ {warning}")
 
 
+def _render_decisions(decisions: list[DecisionRecord]) -> None:
+    if not decisions:
+        return
+    console.print("\n[bold]Decision log[/bold]")
+    for decision in decisions[-6:]:
+        style = {
+            "blocker": "bold red",
+            "warning": "yellow",
+            "info": "dim",
+        }.get(decision.level.value, "dim")
+        console.print(f"  [{style}]• {decision.summary}[/{style}]")
+        if decision.rationale:
+            console.print(f"    [dim]{decision.rationale}[/dim]")
+        if decision.next_step:
+            console.print(f"    [cyan]{decision.next_step}[/cyan]")
+
+
+def _render_fix_queue(fix_queue: list[FixQueueItem]) -> None:
+    if not fix_queue:
+        return
+    console.print("\n[bold]Fix queue[/bold]")
+    for item in fix_queue[:5]:
+        console.print(
+            "  • "
+            f"[{SEVERITY_COLOR.get(Severity(item.severity), 'white')}]"
+            f"{item.severity.upper()}[/] "
+            f"`{item.finding_id[:8]}` {item.title} "
+            f"([dim]{item.file}:{item.line or '?'}[/dim])"
+        )
+    first = fix_queue[0]
+    console.print(f"  Next: [cyan]swain fix {first.finding_id[:8]}[/cyan]")
+
+
 def _to_json(
     findings: list[Finding],
-    secret_hits: list,
+    secret_hits: list[SecretHit],
     run_id: str,
     task_warnings: list[str] | None = None,
-) -> dict:
+    decisions: list[DecisionRecord] | None = None,
+    fix_queue: list[FixQueueItem] | None = None,
+) -> dict[str, Any]:
     task_warnings = task_warnings or []
+    decisions = decisions or []
+    fix_queue = fix_queue or []
     return {
         "run_id": run_id,
         "timestamp": datetime.now(UTC).isoformat(),
@@ -215,21 +200,33 @@ def _to_json(
         "finding_count": len(findings),
         "findings": [f.model_dump() for f in findings],
         "secret_scan_hits": len(secret_hits),
+        "decisions": [decision.model_dump(mode="json") for decision in decisions],
+        "fix_queue": [item.model_dump(mode="json") for item in fix_queue],
     }
 
 
 def _to_markdown(
     findings: list[Finding],
-    secret_hits: list,
+    secret_hits: list[SecretHit],
     run_id: str,
     task_warnings: list[str] | None = None,
+    decisions: list[DecisionRecord] | None = None,
+    fix_queue: list[FixQueueItem] | None = None,
 ) -> str:
     task_warnings = task_warnings or []
+    decisions = decisions or []
+    fix_queue = fix_queue or []
     lines = [
         "# Swain Security Report\n",
         f"**Run ID**: `{run_id}`  ",
         f"**Date**: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M')} UTC\n",
     ]
+    if decisions:
+        lines.append("\n## Decision Log\n")
+        for decision in decisions:
+            lines.append(f"- **{decision.level.value}**: {decision.summary}")
+            if decision.rationale:
+                lines.append(f"  {decision.rationale}")
     if task_warnings:
         lines.append("\n## Scan Warnings\n")
         for warning in task_warnings:
@@ -259,6 +256,13 @@ def _to_markdown(
                 lines.append(f"\n{f.description}\n")
             if f.remediation.summary:
                 lines.append(f"\n**Fix**: {f.remediation.summary}\n")
+    if fix_queue:
+        lines.append("\n## Fix Queue\n")
+        for item in fix_queue:
+            lines.append(
+                f"- `{item.finding_id[:8]}` {item.severity.upper()} "
+                f"{item.title} — {item.rationale}"
+            )
     return "\n".join(lines)
 
 

@@ -19,7 +19,9 @@ Layout:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 import yaml
 from filelock import FileLock
@@ -62,8 +64,21 @@ class MemoryStore:
             yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
         tmp.replace(path)
 
+    def read_json(self, path: Path) -> dict[str, Any]:
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def write_json(self, path: Path, data: dict[str, Any]) -> None:
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2, sort_keys=True))
+        tmp.replace(path)
+
     def append_jsonl(self, path: Path, record: dict) -> None:
-        import json
         with path.open("a") as f:
             f.write(json.dumps(record) + "\n")
 
@@ -80,6 +95,10 @@ class MemoryStore:
         return self.root / "conventions.yaml"
 
     @property
+    def preferences_path(self) -> Path:
+        return self.root / "preferences.yaml"
+
+    @property
     def calibration_path(self) -> Path:
         return self.local / "calibration.json"
 
@@ -94,3 +113,19 @@ class MemoryStore:
     @property
     def history_dir(self) -> Path:
         return self.local / "history"
+
+    @property
+    def mission_ledger_path(self) -> Path:
+        return self.local / "mission-ledger.json"
+
+    @property
+    def decision_log_path(self) -> Path:
+        return self.local / "decision-log.jsonl"
+
+    @property
+    def fix_queue_path(self) -> Path:
+        return self.local / "fix-queue.json"
+
+    @property
+    def watch_state_path(self) -> Path:
+        return self.local / "watch-state.json"

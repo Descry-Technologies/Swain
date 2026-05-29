@@ -16,7 +16,9 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from descry.memory.calibration import CalibrationStore
 from descry.memory.conventions import ConventionStore
+from descry.memory.coworker import CoworkerMemory
 from descry.memory.profile import ProjectProfile
+from descry.memory.store import MemoryStore
 from descry.models import Finding, Mission, Task, WorkerReport
 from descry.orchestrator.pool import WorkerPool
 from descry.playbooks.loader import PlaybookLoader
@@ -206,6 +208,9 @@ class Executor:
     def _build_prompt(self, playbook: dict, task: Task) -> str:
         context_block = self.profile.to_context_block()
         convention_lines = self.conventions.to_context_lines()
+        preference_lines = CoworkerMemory(
+            MemoryStore(self.repo_root)
+        ).preference_context_lines()
         min_conf = self.calibration.min_confidence()
 
         context_block += (
@@ -217,11 +222,16 @@ class Executor:
                 "\nACCEPTED PATTERNS (do not report these as findings):\n"
                 + "\n".join(convention_lines)
             )
+        if preference_lines:
+            context_block += (
+                "\nPROJECT PREFERENCES AND CORRECTIONS:\n"
+                + "\n".join(preference_lines)
+            )
 
         return render_prompt(
             playbook=playbook,
             learned_context=context_block,
-            accepted_patterns=convention_lines,
+            accepted_patterns=[*convention_lines, *preference_lines],
             file_list=task.files,
         )
 

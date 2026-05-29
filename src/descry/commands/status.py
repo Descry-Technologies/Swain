@@ -12,6 +12,7 @@ from descry.memory.conventions import ConventionStore
 from descry.memory.profile import ProjectProfile
 from descry.memory.scheduler import ScheduleStore
 from descry.memory.store import MemoryStore
+from descry.orchestrator.lead import LeadOrchestrator
 
 console = Console()
 
@@ -38,6 +39,7 @@ async def run_status(repo_root: Path) -> None:
     profile = ProjectProfile.load(store)
     conventions = ConventionStore(store)
     schedule = ScheduleStore(store)
+    lead_status = LeadOrchestrator(repo_root).status_snapshot()
 
     console.print(
         Panel.fit("[bold cyan]Swain Status[/bold cyan]", subtitle=str(repo_root))
@@ -64,6 +66,51 @@ async def run_status(repo_root: Path) -> None:
     console.print(f"\n[bold]Active schedule[/bold]: {len(schedules)} playbook(s)")
     for s in schedules[:6]:
         console.print(f"  • [{s['trigger']}] {s['playbook']}")
+
+    # Coworker mission state
+    ledger = lead_status.ledger
+    console.print("\n[bold]Mission[/bold]:")
+    if ledger.phase.value == "idle":
+        console.print("  • idle")
+    else:
+        console.print(
+            f"  • {ledger.phase.value} — "
+            f"{ledger.latest_summary or ledger.active_objective}"
+        )
+        if ledger.mission_id:
+            console.print(f"  • mission `{ledger.mission_id}`")
+
+    if lead_status.fix_queue:
+        next_fix_item = lead_status.fix_queue[0]
+        console.print(f"\n[bold]Fix queue[/bold]: {len(lead_status.fix_queue)}")
+        console.print(
+            f"  • next `{next_fix_item.finding_id[:8]}` — "
+            f"{next_fix_item.title} ({next_fix_item.rationale})"
+        )
+    else:
+        console.print("\n[bold]Fix queue[/bold]: empty")
+
+    watch = lead_status.watch_state
+    console.print("\n[bold]Watch[/bold]:")
+    if watch.enabled:
+        console.print(
+            f"  • enabled every {watch.interval_s}s"
+            f"{f' via {watch.service_name}' if watch.service_name else ''}"
+        )
+        console.print(
+            f"  • last trigger: {watch.last_triggered_at or 'never'} "
+            f"{watch.last_trigger_reason}"
+        )
+    else:
+        console.print("  • not enabled")
+
+    if lead_status.decisions:
+        console.print("\n[bold]Latest decisions[/bold]:")
+        for decision in lead_status.decisions[:5]:
+            console.print(
+                f"  • [{decision.level.value}] {decision.summary}"
+                f"{f' — {decision.next_step}' if decision.next_step else ''}"
+            )
 
     # Run history
     history_files = summary_history_paths(store)[:5]

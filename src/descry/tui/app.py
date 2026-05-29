@@ -25,6 +25,8 @@ from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.widgets import Input, RichLog, Static
 
+from descry.memory.coworker import DecisionRecord
+from descry.orchestrator.lead import LeadOrchestrationError, LeadOrchestrator
 from descry.resources import builtin_playbooks_dir
 from descry.tui.voice import AgentVoice
 
@@ -314,6 +316,7 @@ class SwainAgent:
         self.app = app
         self.voice = app.voice
         self.repo_path = app.repo_path
+        self._lead = LeadOrchestrator(self.repo_path)
         self._profile = None
         self._memory = None
         self._conventions = None
@@ -378,6 +381,8 @@ class SwainAgent:
                 await self._do_feedback(parts[1], parts[2])
             else:
                 await self._say("Try: /feedback <id> fp  or  /feedback <id> fix")
+        elif cmd in ("/watch", "watch"):
+            await self._handle_natural("watch this repo")
         elif cmd in ("/status", "status"):
             await self._do_status()
         elif cmd in ("/init", "init"):
@@ -394,6 +399,42 @@ class SwainAgent:
 
     async def _handle_natural(self, text: str) -> None:
         """Use claude to interpret the intent, then route to the right action."""
+        intent = self._lead.interpret(text)
+        if intent.action == "scan":
+            await self._do_scan(
+                objective=text,
+                launch_focus=intent.launch_focus,
+            )
+            return
+        if intent.action == "status":
+            await self._do_status()
+            return
+        if intent.action == "draft_fix":
+            await self._do_fix(intent.finding_id)
+            return
+        if intent.action == "details":
+            await self._do_scan_details("")
+            return
+        if intent.action == "record_preference":
+            decision = self._lead.record_correction(text)
+            await self._say(
+                "Noted. I'll treat that as project context for future scans.\n"
+                f"Decision: {decision.summary}"
+            )
+            return
+        if intent.action == "watch":
+            state = self._lead.enable_watch()
+            await self._say(
+                "Watch is configured for this repo.\n\n"
+                "To keep it running in the foreground:\n"
+                f"  swain watch {self.repo_path}\n\n"
+                "For a Linux user service:\n"
+                f"  swain daemon install {self.repo_path}\n"
+                f"Polling interval: {state.interval_s}s."
+            )
+            self._refresh_sidebar()
+            return
+
         local_answer = self._try_local_answer(text)
         if local_answer:
             await self._say(local_answer)
@@ -462,7 +503,12 @@ Respond with ONLY one of these JSON objects:
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
-    async def _do_scan(self) -> None:
+    async def _do_scan(
+        self,
+        *,
+        objective: str = "manual scan",
+        launch_focus: bool = False,
+    ) -> None:
         if not self._profile:
             await self._say("No profile here yet — let me initialize first.")
             await self._do_init()
@@ -481,20 +527,31 @@ Respond with ONLY one of these JSON objects:
         )
 
         try:
-            result = await self._run_scan_async()
+            result = await self._lead.run_recon(
+                trigger="manual",
+                objective=objective,
+                launch_focus=launch_focus,
+                on_event=self._scan_event,
+            )
         except TimeoutError:
             await self._say(
                 "Scan timed out. Try on a smaller repo or check the workers."
             )
+            return
+        except LeadOrchestrationError as e:
+            await self._say(str(e))
             return
         except Exception as e:
             await self._say(f"Something went wrong: {e}")
             return
 
         findings = result.findings
-        secret_hits = result.secret_hits
+        secret_hits = len(result.secret_hits)
         warnings = result.warnings
         self._last_findings = findings
+
+        if result.decisions:
+            await self._stream(self._format_decision_log(result.decisions))
 
         # Stream each finding narrative with a short pause between
         for finding in findings:
@@ -572,12 +629,30 @@ Respond with ONLY one of these JSON objects:
 
     async def _do_fix(self, finding_id: str) -> None:
         if not finding_id:
-            await self._say("Give me the finding ID — e.g. /fix abc12345")
+            finding_id = self._lead.next_fix_id()
+        if not finding_id:
+            await self._say(
+                "I don't have a queued fix yet. Run /scan first, then ask me "
+                "to draft the first fix."
+            )
             return
         await self._say(
-            f"Asking Codex to patch `{finding_id[:8]}`...\n\n"
-            f"Run in your terminal for the full diff:\n"
-            f"  swain fix {finding_id}"
+            "Asking Codex for a review-only patch draft for "
+            f"`{finding_id[:8]}`..."
+        )
+        try:
+            from descry.commands.fix import generate_patch_suggestion
+
+            suggestion = await generate_patch_suggestion(self.repo_path, finding_id)
+        except Exception as e:
+            await self._say(f"Couldn't draft that fix: {e}")
+            return
+        if not suggestion.ok:
+            await self._say(suggestion.message)
+            return
+        await self._say(
+            "Patch draft. I did not apply it.\n\n"
+            f"{escape(suggestion.diff)}"
         )
 
     async def _do_feedback(self, finding_id: str, action: str) -> None:
@@ -619,7 +694,9 @@ Respond with ONLY one of these JSON objects:
             except Exception:
                 runs = []
         await self._stream(
-            self.voice.status_narrative(self._profile, conv, sched, runs)
+            self._status_with_coworker_state(
+                self.voice.status_narrative(self._profile, conv, sched, runs)
+            )
         )
 
     async def _do_init(self) -> None:
@@ -855,6 +932,45 @@ Respond with ONLY one of these JSON objects:
             if lowered.startswith(prefix):
                 return text[len(prefix):].strip()
         return ""
+
+    def _format_decision_log(self, decisions: list[DecisionRecord]) -> str:
+        lines = ["Decision log."]
+        for decision in decisions[-6:]:
+            lines.append(f"- {decision.level.value}: {decision.summary}")
+            if decision.rationale:
+                lines.append(f"  Why: {decision.rationale}")
+            if decision.next_step:
+                lines.append(f"  Next: {decision.next_step}")
+        return "\n".join(lines)
+
+    def _status_with_coworker_state(self, base: str) -> str:
+        try:
+            snapshot = self._lead.status_snapshot()
+        except Exception:
+            return base
+        lines = [base, ""]
+        ledger = snapshot.ledger
+        if ledger.phase.value == "idle":
+            lines.append("I'm idle right now.")
+        else:
+            lines.append(
+                f"Current mission: {ledger.phase.value} — "
+                f"{ledger.latest_summary or ledger.active_objective}."
+            )
+        if snapshot.fix_queue:
+            first = snapshot.fix_queue[0]
+            lines.append(
+                f"Next fix: `{first.finding_id[:8]}` — {first.title}."
+            )
+        else:
+            lines.append("Fix queue is empty.")
+        if snapshot.watch_state.enabled:
+            lines.append(
+                f"Watch is enabled every {snapshot.watch_state.interval_s}s."
+            )
+        if snapshot.decisions:
+            lines.append("Latest decision: " + snapshot.decisions[0].summary + ".")
+        return "\n".join(lines)
 
     async def _stream(self, text: str) -> None:
         """Write agent message with typewriter effect."""

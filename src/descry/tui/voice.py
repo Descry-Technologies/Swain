@@ -450,11 +450,12 @@ class AgentVoice:
             "/fix <id>             draft a focused patch for a finding\n"
             "/feedback <id> fp     teach me a false positive\n"
             "/feedback <id> fix    mark something fixed\n"
+            "/watch                show how to enable repo watch\n"
             "/setup                change Claude/Codex model setup\n"
             "/update               update Swain from the source checkout\n"
             "/init                 rebuild the project profile\n\n"
             "You can also ask plain-English questions like 'what should I fix first?' "
-            "or 'explain this auth issue'."
+            "'watch this repo', or 'explain this auth issue'."
         )
 
     def cant_do_yet(self, thing: str) -> str:
