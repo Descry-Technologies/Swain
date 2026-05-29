@@ -74,7 +74,7 @@ else
 fi
 
 say "Installing swain command..."
-UV_TOOL_BIN_DIR="$BIN_DIR" uv tool install --force "$SOURCE_DIR"
+UV_TOOL_BIN_DIR="$BIN_DIR" uv tool install --force --reinstall-package swain "$SOURCE_DIR"
 
 if [ -x "$BIN_DIR/swain" ]; then
   say "Swain installed."

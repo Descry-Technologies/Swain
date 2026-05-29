@@ -74,7 +74,15 @@ def run_update(
         target_bin.mkdir(parents=True, exist_ok=True)
         install_env["UV_TOOL_BIN_DIR"] = str(target_bin)
     install = _run(
-        [uv, "tool", "install", "--force", str(source)],
+        [
+            uv,
+            "tool",
+            "install",
+            "--force",
+            "--reinstall-package",
+            "swain",
+            str(source),
+        ],
         env=install_env,
     )
     if install.returncode != 0:
