@@ -286,6 +286,26 @@ class AgentVoice:
 
         return " ".join(parts)
 
+    def scan_incomplete(self, warnings: list[str]) -> str:
+        if not warnings:
+            return ""
+        shown = warnings[:4]
+        lines = [
+            "I don't trust this scan yet.",
+            "Some worker calls failed or returned unusable output, so an empty "
+            "result here is not the same as clean.",
+            "",
+            "What happened:",
+        ]
+        lines.extend(f"- {warning}" for warning in shown)
+        if len(warnings) > len(shown):
+            lines.append(f"- {len(warnings) - len(shown)} more warning(s)")
+        lines.append("")
+        lines.append(
+            "Run `swain doctor --probe-workers` to check auth/quota, then try again."
+        )
+        return "\n".join(lines)
+
     def scan_next_step(self, findings: list, secret_hits: int) -> str:
         if secret_hits:
             return (

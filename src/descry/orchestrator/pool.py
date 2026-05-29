@@ -31,16 +31,28 @@ class WorkerPool:
         prompt: str,
         files: list,
         repo_root,
+        on_event: Callable[[str], None] | None = None,
     ) -> WorkerResult:
         workers = self._candidate_workers(task.worker)
         if not workers:
             from descry.workers.mock_worker import MockWorker
+
+            if on_event:
+                on_event(
+                    f"{task.playbook_id}: no {task.worker.value} worker available; "
+                    "using mock fallback"
+                )
             workers = [MockWorker()]
 
         last_result: WorkerResult | None = None
         for worker in workers:
             if worker.worker_type in self._disabled_workers:
                 continue
+            if on_event:
+                on_event(
+                    f"{task.playbook_id}: {worker.worker_type.value} reviewing "
+                    f"{len(files)} file{'s' if len(files) != 1 else ''}"
+                )
             type_sem = self._type_sems.setdefault(
                 worker.worker_type,
                 asyncio.Semaphore(self._max_per_type),
@@ -56,10 +68,27 @@ class WorkerPool:
                     timeout_s=int(task.context.get("timeout_s", worker.timeout_s)),
                 )
             if result.report is not None:
+                if on_event:
+                    finding_count = len(result.report.findings)
+                    on_event(
+                        f"{task.playbook_id}: {worker.worker_type.value} returned "
+                        f"{finding_count} finding"
+                        f"{'s' if finding_count != 1 else ''}"
+                    )
                 return result
             last_result = result
+            if on_event:
+                on_event(
+                    f"{task.playbook_id}: {worker.worker_type.value} failed - "
+                    f"{self._result_reason(result)}"
+                )
             if self._should_disable_worker(result):
                 self._disabled_workers.add(worker.worker_type)
+                if on_event:
+                    on_event(
+                        f"{task.playbook_id}: disabled {worker.worker_type.value} "
+                        "for this scan after an auth/quota diagnostic"
+                    )
             if not self._should_try_fallback(result):
                 break
 
@@ -70,6 +99,17 @@ class WorkerPool:
             exit_code=127,
             parse_error="No available worker",
         )
+
+    def _result_reason(self, result: WorkerResult) -> str:
+        if result.timed_out:
+            return "timed out"
+        if result.parse_error:
+            return result.parse_error[:160]
+        if result.exit_code != 0:
+            diagnostic = (result.stderr or "").strip().splitlines()
+            suffix = f": {diagnostic[0][:120]}" if diagnostic else ""
+            return f"exit {result.exit_code}{suffix}"
+        return "no report returned"
 
     def _candidate_workers(self, worker_type: WorkerType) -> list[BaseWorker]:
         order = [worker_type]

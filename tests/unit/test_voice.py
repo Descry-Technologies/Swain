@@ -56,3 +56,11 @@ def test_scan_next_step_points_to_fix_or_feedback() -> None:
 
     assert f"/fix {finding.id[:8]}" in text
     assert f"/feedback {finding.id[:8]} fp" in text
+
+
+def test_scan_incomplete_does_not_claim_clean() -> None:
+    text = AgentVoice().scan_incomplete(["sast.payments parse error: no JSON"])
+
+    assert "don't trust this scan" in text
+    assert "not the same as clean" in text
+    assert "sast.payments" in text

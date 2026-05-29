@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from descry.models import WorkerType
+import pytest
+
+from descry.models import Task, WorkerType
 from descry.orchestrator.pool import WorkerPool
 from descry.workers.base import BaseWorker, WorkerResult
 
@@ -143,3 +145,27 @@ def test_worker_pool_disables_quota_limited_worker_only() -> None:
             parse_error="Invalid worker report schema: authentication bypass",
         )
     )
+
+
+@pytest.mark.asyncio
+async def test_worker_pool_emits_worker_progress_events(tmp_path: Path) -> None:
+    pool = WorkerPool()
+    pool.register(DummyWorker())
+    task = Task(
+        id="task-1",
+        playbook_id="sast.xss.react",
+        worker=WorkerType.CLAUDE,
+        files=["frontend/src/App.tsx"],
+    )
+    events: list[str] = []
+
+    await pool.run_task(
+        task,
+        "Return JSON",
+        [],
+        tmp_path,
+        on_event=events.append,
+    )
+
+    assert any("claude reviewing 0 files" in event for event in events)
+    assert any("claude returned 0 findings" in event for event in events)

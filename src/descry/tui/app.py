@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -83,6 +84,16 @@ class ChatLog(RichLog):
 
     def system_line(self, text: str) -> None:
         self.write(f"  [italic #444444]{text}[/]")
+
+    def scan_event(self, text: str) -> None:
+        self.write(f"  [#777777]• {text}[/]")
+
+
+@dataclass(frozen=True)
+class ScanRunResult:
+    findings: list
+    secret_hits: int
+    warnings: list[str]
 
 
 class Sidebar(Vertical):
@@ -370,7 +381,7 @@ Respond with ONLY one of these JSON objects:
         log.system_line(self.voice.thinking())
 
         try:
-            findings, secret_hits = await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 self._run_scan_async(), timeout=300
             )
         except TimeoutError:
@@ -382,6 +393,9 @@ Respond with ONLY one of these JSON objects:
             await self._say(f"Something went wrong: {e}")
             return
 
+        findings = result.findings
+        secret_hits = result.secret_hits
+        warnings = result.warnings
         self._last_findings = findings
 
         # Stream each finding narrative with a short pause between
@@ -390,8 +404,12 @@ Respond with ONLY one of these JSON objects:
             await self._stream(narrative)
             await asyncio.sleep(0.4)
 
+        if warnings:
+            await self._say(self.voice.scan_incomplete(warnings))
+
         # Done summary
-        await self._say(self.voice.scan_done(findings, secret_hits))
+        if findings or secret_hits or not warnings:
+            await self._say(self.voice.scan_done(findings, secret_hits))
 
         # Opinion on what to do first
         if findings:
@@ -525,6 +543,10 @@ Respond with ONLY one of these JSON objects:
             log.write(f"  [#cccccc]{line}[/]" if line.strip() else "")
         log.write("")
 
+    def _scan_event(self, text: str) -> None:
+        log = self.app.query_one("#chat-log", ChatLog)
+        log.scan_event(text)
+
     async def _stream(self, text: str) -> None:
         """Write agent message with typewriter effect."""
         log = self.app.query_one("#chat-log", ChatLog)
@@ -648,7 +670,7 @@ Respond with ONLY one of these JSON objects:
             last_run=self._last_run_ts() or "never",
         )
 
-    async def _run_scan_async(self) -> tuple[list, int]:
+    async def _run_scan_async(self) -> ScanRunResult:
         from descry.commands.scan import _save_history
         from descry.memory.calibration import CalibrationStore
         from descry.memory.conventions import ConventionStore
@@ -671,8 +693,18 @@ Respond with ONLY one of these JSON objects:
         calibration = CalibrationStore(store)
         schedule = ScheduleStore(store)
 
+        self._scan_event("indexing repo and detecting risky surfaces")
         inventory = RepoInventory.scan(self.repo_path, prev_deps=profile.deps)
+        stack = ", ".join(inventory.frameworks or inventory.languages) or "unknown"
+        self._scan_event(
+            f"repo profile: {len(inventory.all_files)} files, stack={stack}"
+        )
+        self._scan_event("running local secret sweep before model workers")
         secrets = await SecretsScanner().run(self.repo_path)
+        self._scan_event(
+            f"local secret sweep returned {len(secrets)} hit"
+            f"{'s' if len(secrets) != 1 else ''}"
+        )
 
         pool = WorkerPool(max_concurrent=4, max_per_type=2)
         pool.register(ClaudeWorker())
@@ -684,6 +716,17 @@ Respond with ONLY one of these JSON objects:
             user_dir=store.root / "playbooks",
         )
         mission = Planner(loader, schedule).plan("manual", inventory)
+        task_names = ", ".join(task.playbook_id for task in mission.tasks)
+        file_count = sum(len(task.files) for task in mission.tasks)
+        self._scan_event(
+            f"planned {len(mission.tasks)} model playbook"
+            f"{'s' if len(mission.tasks) != 1 else ''} over {file_count} "
+            f"file reference{'s' if file_count != 1 else ''}"
+        )
+        self._scan_event(f"queue: {task_names or 'empty'}")
+        self._scan_event(
+            "model workers can spend Claude/Codex quota; worker calls are shown below"
+        )
         executor = Executor(
             pool,
             loader,
@@ -692,9 +735,13 @@ Respond with ONLY one of these JSON objects:
             calibration,
             self.repo_path,
         )
-        findings = await executor.execute(mission)
+        findings = await executor.execute(mission, on_event=self._scan_event)
 
         _save_history(store, mission.id, findings)
         schedule.increment_run_count()
 
-        return findings, len(secrets)
+        return ScanRunResult(
+            findings=findings,
+            secret_hits=len(secrets),
+            warnings=executor.task_warnings,
+        )

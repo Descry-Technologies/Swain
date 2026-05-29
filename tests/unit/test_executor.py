@@ -24,6 +24,7 @@ class RetryRecordingPool(WorkerPool):
         prompt: str,
         files: list[Path],
         repo_root: Path,
+        on_event=None,
     ) -> WorkerResult:
         self.calls.append(task.files)
         if len(self.calls) == 1:
@@ -73,3 +74,34 @@ async def test_executor_retries_timeouts_with_reduced_file_scope(
         ["a.py", "b.py", "c.py", "d.py"],
         ["a.py", "b.py"],
     ]
+
+
+@pytest.mark.asyncio
+async def test_executor_emits_retry_progress_events(tmp_path: Path) -> None:
+    store = MemoryStore(tmp_path)
+    pool = RetryRecordingPool()
+    executor = Executor(
+        pool,
+        PlaybookLoader(tmp_path / "playbooks"),
+        ProjectProfile(repo_name="demo"),
+        ConventionStore(store),
+        CalibrationStore(store),
+        tmp_path,
+    )
+    task = Task(
+        id="task-1",
+        playbook_id="sast.auth.python",
+        worker=WorkerType.CLAUDE,
+        files=["a.py", "b.py", "c.py", "d.py"],
+        context={"playbook_version": 1, "timeout_s": 10},
+    )
+    playbook = {
+        "id": "sast.auth.python",
+        "version": 1,
+        "prompt": "Read files:\n{{file_list}}",
+    }
+    events: list[str] = []
+
+    await executor._run_task(task, playbook, on_event=events.append)
+
+    assert any("retrying with 2 files" in event for event in events)
