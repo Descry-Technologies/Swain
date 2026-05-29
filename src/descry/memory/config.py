@@ -36,6 +36,7 @@ class SwainConfig:
     concurrency: str = "careful"
     max_concurrent: int = 1
     max_per_type: int = 1
+    cli_task_timeout_s: int = 600
     api_max_output_tokens: int = 2048
     api_file_char_limit: int = 120_000
 
@@ -68,6 +69,10 @@ class SwainConfig:
         preset_max, preset_per_type = CONCURRENCY_PRESETS[concurrency]
         max_concurrent = _positive_int(workers.get("max_concurrent"), preset_max)
         max_per_type = _positive_int(workers.get("max_per_type"), preset_per_type)
+        cli_task_timeout_s = _positive_int(
+            workers.get("cli_task_timeout_s"),
+            _positive_int(data.get("cli_task_timeout_s"), 600),
+        )
 
         setup_done = setup.get("completed", data.get("setup_completed", False))
         return cls(
@@ -100,6 +105,7 @@ class SwainConfig:
             concurrency=concurrency,
             max_concurrent=max_concurrent,
             max_per_type=max_per_type,
+            cli_task_timeout_s=cli_task_timeout_s,
             api_max_output_tokens=_positive_int(
                 api.get("max_output_tokens"),
                 _positive_int(data.get("api_max_output_tokens"), 2048),
@@ -160,6 +166,7 @@ class SwainConfig:
                 "concurrency": self.concurrency,
                 "max_concurrent": self.max_concurrent,
                 "max_per_type": self.max_per_type,
+                "cli_task_timeout_s": self.cli_task_timeout_s,
                 "claude": {
                     "runtime": self.claude_runtime,
                     "model": self.claude_model,

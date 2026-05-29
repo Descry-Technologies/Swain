@@ -19,6 +19,7 @@ def test_config_round_trips_setup_choices(tmp_path: Path) -> None:
         concurrency="balanced",
         max_concurrent=2,
         max_per_type=1,
+        cli_task_timeout_s=900,
     )
 
     config.save(store)
@@ -29,6 +30,7 @@ def test_config_round_trips_setup_choices(tmp_path: Path) -> None:
     assert loaded.uses_codex is True
     assert loaded.uses_claude is False
     assert loaded.codex_model == "custom-codex-model"
+    assert loaded.cli_task_timeout_s == 900
     assert "Codex CLI: custom-codex-model" in loaded.worker_summary()
 
 
@@ -45,6 +47,7 @@ def test_build_worker_pool_uses_configured_models() -> None:
         worker_mode="hybrid",
         claude_model="claude-security-model",
         codex_model="codex-security-model",
+        cli_task_timeout_s=750,
     )
 
     pool = build_worker_pool(config)
@@ -55,6 +58,8 @@ def test_build_worker_pool_uses_configured_models() -> None:
     assert isinstance(codex, CodexWorker)
     assert claude.model == "claude-security-model"
     assert codex.model == "codex-security-model"
+    assert claude.timeout_s == 750
+    assert codex.timeout_s == 750
 
 
 def test_build_worker_pool_can_use_codex_api_runtime() -> None:
@@ -79,6 +84,7 @@ async def test_run_setup_can_use_noninteractive_defaults(tmp_path: Path) -> None
         worker_mode="claude",
         claude_model="default",
         concurrency="careful",
+        cli_task_timeout_s=840,
         interactive=False,
         init_profile=False,
     )
@@ -90,6 +96,7 @@ async def test_run_setup_can_use_noninteractive_defaults(tmp_path: Path) -> None
     assert saved.claude_model == ""
     assert saved.claude_runtime == "cli"
     assert saved.concurrency == "careful"
+    assert saved.cli_task_timeout_s == 840
     assert not (tmp_path / ".swain" / "profile.yaml").exists()
 
 

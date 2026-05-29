@@ -46,6 +46,34 @@ class TimeoutWorker(BaseWorker):
         return WorkerResult(report=None, timed_out=True, exit_code=-1)
 
 
+class TimeoutRecordingWorker(BaseWorker):
+    worker_type = WorkerType.CLAUDE
+
+    def __init__(self, timeout_s: int) -> None:
+        super().__init__(timeout_s=timeout_s)
+        self.observed_timeout_s: int | None = None
+
+    def is_available(self) -> bool:
+        return True
+
+    async def _build_command(self, prompt: str, worktree: Path) -> list[str]:
+        return ["echo", "{}"]
+
+    async def run(
+        self,
+        task_id: str,
+        prompt: str,
+        files: list[Path],
+        repo_root: Path,
+        *,
+        playbook_id: str = "",
+        playbook_version: int = 1,
+        timeout_s: int | None = None,
+    ) -> WorkerResult:
+        self.observed_timeout_s = timeout_s
+        return WorkerResult(report=None, timed_out=True, exit_code=-1)
+
+
 def test_extract_json_prefers_report_object_from_noisy_codex_output() -> None:
     worker = DummyWorker()
     output = """
@@ -212,6 +240,10 @@ async def test_codex_model_option_is_before_prompt(tmp_path: Path) -> None:
     assert "Prompt" in cmd[-1]
 
 
+def test_codex_default_timeout_is_long_enough_for_cli_reviews() -> None:
+    assert CodexWorker().timeout_s == 600
+
+
 def test_worker_pool_disables_quota_limited_worker_only() -> None:
     pool = WorkerPool()
 
@@ -306,3 +338,21 @@ async def test_worker_pool_pauses_worker_after_repeated_timeouts(
     assert result.report is None
     assert "No available codex worker" in result.parse_error
     assert any("disabled codex for this scan after 2 timeouts" in e for e in events)
+
+
+@pytest.mark.asyncio
+async def test_worker_pool_uses_worker_timeout_floor(tmp_path: Path) -> None:
+    pool = WorkerPool()
+    worker = TimeoutRecordingWorker(timeout_s=600)
+    pool.register(worker)
+    task = Task(
+        id="task-1",
+        playbook_id="secrets.scan",
+        worker=WorkerType.CLAUDE,
+        files=[],
+        context={"timeout_s": 90},
+    )
+
+    await pool.run_task(task, "Return JSON", [], tmp_path)
+
+    assert worker.observed_timeout_s == 600

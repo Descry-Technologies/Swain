@@ -31,6 +31,7 @@ async def run_setup(
     claude_runtime: str | None = None,
     codex_runtime: str | None = None,
     concurrency: str | None = None,
+    cli_task_timeout_s: int | None = None,
     api_max_output_tokens: int | None = None,
     api_file_char_limit: int | None = None,
     interactive: bool = True,
@@ -79,6 +80,11 @@ async def run_setup(
     _render_concurrency_choices()
     selected_concurrency = _choose_concurrency(concurrency, existing, interactive)
     max_concurrent, max_per_type = CONCURRENCY_PRESETS[selected_concurrency]
+    selected_cli_timeout_s = (
+        cli_task_timeout_s
+        if cli_task_timeout_s is not None and cli_task_timeout_s > 0
+        else existing.cli_task_timeout_s
+    )
     max_output_tokens = api_max_output_tokens or existing.api_max_output_tokens
     file_char_limit = api_file_char_limit or existing.api_file_char_limit
 
@@ -95,6 +101,7 @@ async def run_setup(
         concurrency=selected_concurrency,
         max_concurrent=max_concurrent,
         max_per_type=max_per_type,
+        cli_task_timeout_s=selected_cli_timeout_s,
         api_max_output_tokens=max_output_tokens,
         api_file_char_limit=file_char_limit,
     )

@@ -30,7 +30,12 @@ def build_worker_pool(config: SwainConfig, *, mock: bool = False) -> WorkerPool:
                 )
             )
         else:
-            pool.register(ClaudeWorker(model=config.claude_model or None))
+            pool.register(
+                ClaudeWorker(
+                    timeout_s=config.cli_task_timeout_s,
+                    model=config.claude_model or None,
+                )
+            )
     if config.uses_codex:
         if config.codex_runtime == "api":
             pool.register(
@@ -43,5 +48,10 @@ def build_worker_pool(config: SwainConfig, *, mock: bool = False) -> WorkerPool:
                 )
             )
         else:
-            pool.register(CodexWorker(model=config.codex_model or None))
+            pool.register(
+                CodexWorker(
+                    timeout_s=config.cli_task_timeout_s,
+                    model=config.codex_model or None,
+                )
+            )
     return pool

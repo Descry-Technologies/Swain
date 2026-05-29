@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
@@ -61,7 +62,10 @@ async def generate_patch_suggestion(
         )
 
     config = SwainConfig.load(store)
-    worker = CodexWorker(model=config.codex_model or None)
+    worker = CodexWorker(
+        timeout_s=config.cli_task_timeout_s,
+        model=config.codex_model or None,
+    )
     if not worker.is_available():
         return PatchSuggestion(
             ok=False,
@@ -102,8 +106,11 @@ async def generate_patch_suggestion(
     return PatchSuggestion(ok=True, message="Patch draft ready.", diff=diff)
 
 
-def _relevant_files(repo_root: Path, finding: dict) -> list[Path]:
-    rel_file = finding.get("evidence", {}).get("file", "")
+def _relevant_files(repo_root: Path, finding: dict[str, Any]) -> list[Path]:
+    evidence = finding.get("evidence", {})
+    if not isinstance(evidence, dict):
+        return []
+    rel_file = evidence.get("file", "")
     if not rel_file:
         return []
 
@@ -119,7 +126,7 @@ def _relevant_files(repo_root: Path, finding: dict) -> list[Path]:
     return [candidate]
 
 
-def _build_prompt(finding: dict) -> str:
+def _build_prompt(finding: dict[str, Any]) -> str:
     finding_json = json.dumps(finding, indent=2)
     return f"""\
 You are generating a minimal security fix for one Swain finding.

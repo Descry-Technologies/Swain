@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from pathlib import Path
 
 from descry.models import Task, WorkerType
 from descry.workers.base import BaseWorker, WorkerResult
@@ -30,8 +31,8 @@ class WorkerPool:
         self,
         task: Task,
         prompt: str,
-        files: list,
-        repo_root,
+        files: list[Path],
+        repo_root: Path,
         on_event: Callable[[str], None] | None = None,
     ) -> WorkerResult:
         workers = self._candidate_workers(task.worker)
@@ -80,7 +81,7 @@ class WorkerPool:
                     repo_root,
                     playbook_id=task.playbook_id,
                     playbook_version=int(task.context.get("playbook_version", 1)),
-                    timeout_s=int(task.context.get("timeout_s", worker.timeout_s)),
+                    timeout_s=self._effective_timeout_s(task, worker),
                 )
             if result.report is not None:
                 if on_event:
@@ -137,6 +138,10 @@ class WorkerPool:
             return f"exit {result.exit_code}{suffix}"
         return "no report returned"
 
+    def _effective_timeout_s(self, task: Task, worker: BaseWorker) -> int:
+        configured_timeout = int(task.context.get("timeout_s", worker.timeout_s))
+        return max(configured_timeout, worker.timeout_s)
+
     def _candidate_workers(self, worker_type: WorkerType) -> list[BaseWorker]:
         order = [worker_type]
         if worker_type == WorkerType.CLAUDE:
@@ -183,10 +188,15 @@ class WorkerPool:
 
     async def run_tasks_parallel(
         self,
-        tasks: list[tuple[Task, str, list, object]],
+        tasks: list[tuple[Task, str, list[Path], Path]],
         on_result: Callable[[Task, WorkerResult], None] | None = None,
     ) -> list[WorkerResult]:
-        async def _run(task, prompt, files, repo_root):
+        async def _run(
+            task: Task,
+            prompt: str,
+            files: list[Path],
+            repo_root: Path,
+        ) -> WorkerResult:
             result = await self.run_task(task, prompt, files, repo_root)
             if on_result:
                 on_result(task, result)

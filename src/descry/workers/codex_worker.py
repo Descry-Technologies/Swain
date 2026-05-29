@@ -37,7 +37,7 @@ class PatchResult:
 class CodexWorker(BaseWorker):
     worker_type = WorkerType.CODEX
 
-    def __init__(self, timeout_s: int = 180, model: str | None = None) -> None:
+    def __init__(self, timeout_s: int = 600, model: str | None = None) -> None:
         super().__init__(timeout_s)
         self.model = model
 

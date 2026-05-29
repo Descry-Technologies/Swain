@@ -175,6 +175,11 @@ def setup(
         "--speed",
         help="Scan speed: careful, balanced, or fast",
     ),
+    cli_task_timeout: int = typer.Option(
+        None,
+        "--cli-task-timeout",
+        help="Seconds before a Claude/Codex CLI worker task is timed out",
+    ),
     api_max_output_tokens: int = typer.Option(
         None,
         "--api-max-output-tokens",
@@ -210,6 +215,7 @@ def setup(
                 claude_runtime=claude_runtime,
                 codex_runtime=codex_runtime,
                 concurrency=speed,
+                cli_task_timeout_s=cli_task_timeout,
                 api_max_output_tokens=api_max_output_tokens,
                 api_file_char_limit=api_file_char_limit,
                 interactive=not yes,
