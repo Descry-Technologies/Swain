@@ -14,7 +14,7 @@ from descry.models import (
     Severity,
     WorkerType,
 )
-from descry.orchestrator.lead import LeadOrchestrator
+from descry.orchestrator.lead import LeadOrchestrator, _save_history
 from descry.orchestrator.pool import WorkerPool
 from descry.workers.base import BaseWorker, WorkerResult
 
@@ -103,6 +103,24 @@ async def test_recon_persists_mission_decisions_and_fix_queue(
 
 
 @pytest.mark.asyncio
+async def test_recon_can_run_without_persisting_mock_state(
+    tmp_path: Path,
+) -> None:
+    _init_repo_memory(tmp_path)
+
+    result = await LeadOrchestrator(tmp_path).run_recon(mock=True, persist=False)
+
+    store = MemoryStore(tmp_path)
+    assert result.decisions
+    assert result.mission_id
+    assert not store.mission_ledger_path.exists()
+    assert not store.decision_log_path.exists()
+    assert not store.fix_queue_path.exists()
+    assert not store.schedule_path.exists()
+    assert not list(store.history_dir.glob("*.json"))
+
+
+@pytest.mark.asyncio
 async def test_worker_failures_create_warning_decisions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -142,6 +160,22 @@ def test_conversational_correction_persists_project_preference(
     assert CoworkerMemory(store).preference_context_lines() == [
         "- accepted risk pattern: auth is handled upstream here"
     ]
+
+
+def test_next_fix_falls_back_to_latest_finding_history(tmp_path: Path) -> None:
+    _init_repo_memory(tmp_path)
+    store = MemoryStore(tmp_path)
+    finding = _finding(
+        "sast.auth.python",
+        Severity.HIGH,
+        0.90,
+        "Missing auth on tenant endpoint",
+        network_exposed=True,
+        requires_auth=False,
+    )
+    _save_history(store, "run123", [finding])
+
+    assert LeadOrchestrator(tmp_path).next_fix_id() == finding.id
 
 
 def _init_repo_memory(repo_root: Path) -> None:

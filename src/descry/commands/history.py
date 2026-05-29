@@ -45,6 +45,7 @@ def summary_history_paths(store: MemoryStore) -> list[Path]:
             for directory in _history_dirs(store)
             for path in directory.glob("*.json")
             if "findings" not in path.name
+            and not _is_mock_summary(path)
         ),
         key=_history_sort_key,
         reverse=True,
@@ -57,6 +58,7 @@ def _finding_history_paths(store: MemoryStore) -> list[Path]:
             path
             for directory in _history_dirs(store)
             for path in directory.glob("*-findings.json")
+            if not _is_mock_finding_history(path, store)
         ),
         key=_history_sort_key,
         reverse=True,
@@ -85,6 +87,22 @@ def _read_findings(path: Path) -> list[dict]:
         return []
 
     return [finding for finding in findings if isinstance(finding, dict)]
+
+
+def _is_mock_finding_history(path: Path, store: MemoryStore) -> bool:
+    run_id = path.name.removesuffix("-findings.json")
+    for summary_path in path.parent.glob(f"*-{run_id}.json"):
+        if _is_mock_summary(summary_path):
+            return True
+    return False
+
+
+def _is_mock_summary(path: Path) -> bool:
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    return isinstance(data, dict) and bool(data.get("mock"))
 
 
 def _mtime(path: Path) -> float:

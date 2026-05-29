@@ -53,6 +53,7 @@ async def run_scan(
             trigger=trigger,
             objective="manual scan",
             mock=mock,
+            persist=not mock,
             on_event=_terminal_event if output == "terminal" else None,
         )
     except LeadOrchestrationError as exc:

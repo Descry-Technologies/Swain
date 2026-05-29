@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Callable
@@ -12,6 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from descry.commands.history import load_latest_findings
 from descry.memory.calibration import CalibrationStore
 from descry.memory.config import SwainConfig
 from descry.memory.conventions import ConventionStore
@@ -148,6 +150,7 @@ class LeadOrchestrator:
         objective: str = "",
         launch_focus: bool = False,
         mock: bool = False,
+        persist: bool = True,
         on_event: Callable[[str], None] | None = None,
     ) -> LeadRunResult:
         profile_path = self.repo_root / ".swain" / "profile.yaml"
@@ -165,11 +168,22 @@ class LeadOrchestrator:
             if launch_focus
             else "scan this repo"
         )
-        ledger = coworker.start_mission(
-            objective=objective_text,
-            mission_type=MissionKind.RECON,
-            trigger=trigger,
-        )
+        if persist:
+            ledger = coworker.start_mission(
+                objective=objective_text,
+                mission_type=MissionKind.RECON,
+                trigger=trigger,
+            )
+        else:
+            now = datetime.now(UTC).isoformat()
+            ledger = MissionLedger(
+                active_objective=objective_text,
+                mission_type=MissionKind.RECON,
+                phase=MissionPhase.RECON,
+                trigger=trigger,
+                started_at=now,
+                updated_at=now,
+            )
 
         def emit(event: str) -> None:
             events.append(event)
@@ -184,21 +198,31 @@ class LeadOrchestrator:
             trusted: bool = True,
             next_step: str = "",
         ) -> DecisionRecord:
-            decision = coworker.append_decision(
-                summary=summary,
-                mission_id=ledger.mission_id,
-                level=level,
-                rationale=rationale,
-                trusted=trusted,
-                next_step=next_step,
-            )
+            if persist:
+                decision = coworker.append_decision(
+                    summary=summary,
+                    mission_id=ledger.mission_id,
+                    level=level,
+                    rationale=rationale,
+                    trusted=trusted,
+                    next_step=next_step,
+                )
+            else:
+                decision = _decision_record(
+                    summary=summary,
+                    mission_id=ledger.mission_id,
+                    level=level,
+                    rationale=rationale,
+                    trusted=trusted,
+                    next_step=next_step,
+                )
             decisions.append(decision)
             return decision
 
         profile = ProjectProfile.load(store)
         conventions = ConventionStore(store)
         calibration = CalibrationStore(store)
-        schedule = ScheduleStore(store)
+        schedule = ScheduleStore(store, persist_defaults=persist)
 
         emit("indexing repo and detecting risky surfaces")
         inventory = RepoInventory.scan(self.repo_root, prev_deps=profile.deps)
@@ -242,7 +266,8 @@ class LeadOrchestrator:
             user_dir=store.root / "playbooks",
         )
         mission = Planner(loader, schedule).plan(trigger, inventory)
-        ledger.latest_decision_ids = coworker.load_ledger().latest_decision_ids
+        if persist:
+            ledger.latest_decision_ids = coworker.load_ledger().latest_decision_ids
         ledger.mission_id = mission.id
         ledger.delegated_tasks = [
             DelegatedTaskRecord(
@@ -252,7 +277,8 @@ class LeadOrchestrator:
             )
             for task in mission.tasks
         ]
-        coworker.save_ledger(ledger)
+        if persist:
+            coworker.save_ledger(ledger)
 
         task_names = ", ".join(task.playbook_id for task in mission.tasks)
         file_count = sum(len(task.files) for task in mission.tasks)
@@ -286,14 +312,16 @@ class LeadOrchestrator:
         )
         findings = await executor.execute(mission, on_event=emit)
         warnings = list(executor.task_warnings)
-        _save_history(store, mission.id, findings)
+        if persist:
+            _save_history(store, mission.id, findings, mock=mock)
 
-        schedule.increment_run_count()
-        if schedule.needs_recompute():
-            schedule.apply_recompute(schedule._data.get("schedules", []))
+            schedule.increment_run_count()
+            if schedule.needs_recompute():
+                schedule.apply_recompute(schedule._data.get("schedules", []))
 
         fix_queue = self.build_fix_queue(findings)
-        coworker.save_fix_queue(fix_queue)
+        if persist:
+            coworker.save_fix_queue(fix_queue)
 
         if warnings:
             for warning in warnings[:6]:
@@ -349,12 +377,13 @@ class LeadOrchestrator:
             phase = MissionPhase.DONE
             summary = "No findings returned by completed checks"
 
-        coworker.complete_mission(
-            ledger,
-            phase=phase,
-            summary=summary,
-            warnings=warnings,
-        )
+        if persist:
+            coworker.complete_mission(
+                ledger,
+                phase=phase,
+                summary=summary,
+                warnings=warnings,
+            )
 
         return LeadRunResult(
             mission_id=mission.id,
@@ -376,17 +405,35 @@ class LeadOrchestrator:
     def status_snapshot(self) -> LeadStatusSnapshot:
         store = MemoryStore(self.repo_root)
         coworker = CoworkerMemory(store)
+        fix_queue = coworker.load_fix_queue()
+        if not fix_queue:
+            fix_queue = self.build_fix_queue_from_history(store)
         return LeadStatusSnapshot(
             ledger=coworker.load_ledger(),
             decisions=coworker.recent_decisions(),
-            fix_queue=coworker.load_fix_queue(),
+            fix_queue=fix_queue,
             watch_state=coworker.load_watch_state(),
         )
 
     def next_fix_id(self) -> str:
         store = MemoryStore(self.repo_root)
-        next_item = CoworkerMemory(store).next_fix()
+        coworker = CoworkerMemory(store)
+        next_item = coworker.next_fix()
+        if next_item is None:
+            history_queue = self.build_fix_queue_from_history(store)
+            next_item = history_queue[0] if history_queue else None
         return next_item.finding_id if next_item else ""
+
+    def build_fix_queue_from_history(self, store: MemoryStore) -> list[FixQueueItem]:
+        findings: list[Finding] = []
+        for raw_finding in load_latest_findings(store):
+            if raw_finding.get("lifecycle", {}).get("status", "open") != "open":
+                continue
+            try:
+                findings.append(Finding.model_validate(raw_finding))
+            except ValueError:
+                continue
+        return self.build_fix_queue(findings)
 
     def record_correction(self, text: str) -> DecisionRecord:
         store = MemoryStore(self.repo_root)
@@ -565,11 +612,18 @@ class LeadOrchestrator:
         return timeout_count >= 2 or disabled_for_timeout
 
 
-def _save_history(store: MemoryStore, run_id: str, findings: list[Finding]) -> None:
+def _save_history(
+    store: MemoryStore,
+    run_id: str,
+    findings: list[Finding],
+    *,
+    mock: bool = False,
+) -> None:
     timestamp = datetime.now(UTC)
     record: dict[str, Any] = {
         "run_id": run_id,
         "timestamp": timestamp.isoformat(),
+        "mock": mock,
         "finding_count": len(findings),
         "severities": {
             severity.value: sum(
@@ -584,3 +638,28 @@ def _save_history(store: MemoryStore, run_id: str, findings: list[Finding]) -> N
     findings_path = store.history_dir / f"{run_id}-findings.json"
     payload = [finding.model_dump(mode="json") for finding in findings]
     findings_path.write_text(json.dumps(payload, indent=2))
+
+
+def _decision_record(
+    *,
+    summary: str,
+    mission_id: str = "",
+    level: DecisionLevel = DecisionLevel.INFO,
+    rationale: str = "",
+    trusted: bool = True,
+    next_step: str = "",
+) -> DecisionRecord:
+    timestamp = datetime.now(UTC).isoformat()
+    decision_id = hashlib.sha256(
+        f"{timestamp}:{mission_id}:{summary}".encode()
+    ).hexdigest()[:12]
+    return DecisionRecord(
+        id=decision_id,
+        timestamp=timestamp,
+        mission_id=mission_id,
+        level=level,
+        summary=summary,
+        rationale=rationale,
+        trusted=trusted,
+        next_step=next_step,
+    )

@@ -24,6 +24,8 @@ class GitWatchState:
     commit: str
     tracked_status: str
     signature: str
+    valid: bool = True
+    error: str = ""
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,8 @@ async def run_watch(
         result = await poll_git_once(repo_root, mock=mock)
         if result.triggered:
             console.print(f"[green]Triggered recon:[/green] {result.reason}")
+        elif once and not result.signature:
+            console.print(f"[yellow]Watch unavailable:[/yellow] {result.reason}")
         elif once:
             console.print(f"[dim]No git change: {result.signature[:12]}[/dim]")
         if once:
@@ -78,6 +82,17 @@ async def poll_git_once(repo_root: Path, *, mock: bool = False) -> WatchPollResu
     coworker = CoworkerMemory(store)
     watch_state = coworker.load_watch_state()
     previous_signature = watch_state.last_git_signature
+
+    if not git_state.valid:
+        watch_state.enabled = False
+        watch_state.repo_path = str(repo_root)
+        watch_state.last_trigger_reason = git_state.error
+        coworker.save_watch_state(watch_state)
+        return WatchPollResult(
+            triggered=False,
+            reason=git_state.error,
+            signature="",
+        )
 
     watch_state.enabled = True
     watch_state.repo_path = str(repo_root)
@@ -111,6 +126,7 @@ async def poll_git_once(repo_root: Path, *, mock: bool = False) -> WatchPollResu
                 trigger="on_commit",
                 objective=f"watch-triggered recon: {reason}",
                 mock=mock,
+                persist=not mock,
             )
             mission_id = result.mission_id
             watch_state.last_scan_mission_id = mission_id
@@ -127,7 +143,24 @@ async def poll_git_once(repo_root: Path, *, mock: bool = False) -> WatchPollResu
 
 
 def read_git_state(repo_root: Path) -> GitWatchState:
+    is_inside = _git_output(repo_root, "rev-parse", "--is-inside-work-tree")
+    if is_inside != "true":
+        return GitWatchState(
+            commit="",
+            tracked_status="",
+            signature="",
+            valid=False,
+            error="not a git repository",
+        )
     commit = _git_output(repo_root, "rev-parse", "HEAD")
+    if not commit:
+        return GitWatchState(
+            commit="",
+            tracked_status="",
+            signature="",
+            valid=False,
+            error="git HEAD is unavailable",
+        )
     status = _git_output(
         repo_root,
         "status",

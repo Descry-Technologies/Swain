@@ -54,8 +54,9 @@ DEFAULT_SCHEDULE: list[dict[str, Any]] = [
 
 
 class ScheduleStore:
-    def __init__(self, store: MemoryStore) -> None:
+    def __init__(self, store: MemoryStore, *, persist_defaults: bool = True) -> None:
         self._store = store
+        self._persist_defaults = persist_defaults
         self._data: dict[str, Any] = {}
         self._load()
 
@@ -67,9 +68,12 @@ class ScheduleStore:
                 "runs_since_last_recompute": 0,
                 "schedules": DEFAULT_SCHEDULE,
             }
-            self._save()
+            if self._persist_defaults:
+                self._save()
 
     def _save(self) -> None:
+        if not self._persist_defaults:
+            return
         with self._store.lock():
             self._store.write_yaml(self._store.schedule_path, self._data)
 
