@@ -139,6 +139,8 @@ class WorkerPool:
         return "no report returned"
 
     def _effective_timeout_s(self, task: Task, worker: BaseWorker) -> int:
+        if worker.timeout_s <= 0:
+            return 0
         configured_timeout = int(task.context.get("timeout_s", worker.timeout_s))
         return max(configured_timeout, worker.timeout_s)
 

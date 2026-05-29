@@ -37,7 +37,7 @@ class PatchResult:
 class CodexWorker(BaseWorker):
     worker_type = WorkerType.CODEX
 
-    def __init__(self, timeout_s: int = 600, model: str | None = None) -> None:
+    def __init__(self, timeout_s: int = 0, model: str | None = None) -> None:
         super().__init__(timeout_s)
         self.model = model
 
@@ -83,10 +83,14 @@ class CodexWorker(BaseWorker):
             return PatchResult(stderr=str(e), exit_code=127)
 
         try:
-            stdout_raw, stderr_raw = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=self.timeout_s,
-            )
+            effective_timeout_s = self._effective_timeout_s(self.timeout_s)
+            if effective_timeout_s is None:
+                stdout_raw, stderr_raw = await proc.communicate()
+            else:
+                stdout_raw, stderr_raw = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=effective_timeout_s,
+                )
         except TimeoutError:
             proc.kill()
             await proc.wait()

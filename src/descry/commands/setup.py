@@ -82,7 +82,7 @@ async def run_setup(
     max_concurrent, max_per_type = CONCURRENCY_PRESETS[selected_concurrency]
     selected_cli_timeout_s = (
         cli_task_timeout_s
-        if cli_task_timeout_s is not None and cli_task_timeout_s > 0
+        if cli_task_timeout_s is not None and cli_task_timeout_s >= 0
         else existing.cli_task_timeout_s
     )
     max_output_tokens = api_max_output_tokens or existing.api_max_output_tokens

@@ -98,7 +98,7 @@ class BaseWorker(ABC):
     ) -> WorkerResult:
         cmd = await self._build_command(prompt, worktree)
         env = self._sanitized_env()
-        effective_timeout_s = timeout_s or self.timeout_s
+        effective_timeout_s = self._effective_timeout_s(timeout_s)
 
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -112,10 +112,13 @@ class BaseWorker(ABC):
             return WorkerResult(report=None, stderr=str(e), exit_code=127)
 
         try:
-            stdout_raw, stderr_raw = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=effective_timeout_s,
-            )
+            if effective_timeout_s is None:
+                stdout_raw, stderr_raw = await proc.communicate()
+            else:
+                stdout_raw, stderr_raw = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=effective_timeout_s,
+                )
         except TimeoutError:
             proc.kill()
             await proc.wait()
@@ -140,6 +143,10 @@ class BaseWorker(ABC):
             playbook_id,
             playbook_version,
         )
+
+    def _effective_timeout_s(self, timeout_s: int | None) -> int | None:
+        effective_timeout_s = self.timeout_s if timeout_s is None else timeout_s
+        return None if effective_timeout_s <= 0 else effective_timeout_s
 
     def _parse_output(
         self,

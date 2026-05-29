@@ -240,8 +240,11 @@ async def test_codex_model_option_is_before_prompt(tmp_path: Path) -> None:
     assert "Prompt" in cmd[-1]
 
 
-def test_codex_default_timeout_is_long_enough_for_cli_reviews() -> None:
-    assert CodexWorker().timeout_s == 600
+def test_codex_default_has_no_wall_clock_timeout() -> None:
+    worker = CodexWorker()
+
+    assert worker.timeout_s == 0
+    assert worker._effective_timeout_s(worker.timeout_s) is None
 
 
 def test_worker_pool_disables_quota_limited_worker_only() -> None:
@@ -356,3 +359,23 @@ async def test_worker_pool_uses_worker_timeout_floor(tmp_path: Path) -> None:
     await pool.run_task(task, "Return JSON", [], tmp_path)
 
     assert worker.observed_timeout_s == 600
+
+
+@pytest.mark.asyncio
+async def test_worker_pool_does_not_apply_playbook_timeout_when_cli_timeout_disabled(
+    tmp_path: Path,
+) -> None:
+    pool = WorkerPool()
+    worker = TimeoutRecordingWorker(timeout_s=0)
+    pool.register(worker)
+    task = Task(
+        id="task-1",
+        playbook_id="secrets.scan",
+        worker=WorkerType.CLAUDE,
+        files=[],
+        context={"timeout_s": 90},
+    )
+
+    await pool.run_task(task, "Return JSON", [], tmp_path)
+
+    assert worker.observed_timeout_s == 0

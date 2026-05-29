@@ -178,7 +178,10 @@ def setup(
     cli_task_timeout: int = typer.Option(
         None,
         "--cli-task-timeout",
-        help="Seconds before a Claude/Codex CLI worker task is timed out",
+        help=(
+            "Seconds before a Claude/Codex CLI worker task is timed out; "
+            "0 disables the wall-clock timeout"
+        ),
     ),
     api_max_output_tokens: int = typer.Option(
         None,

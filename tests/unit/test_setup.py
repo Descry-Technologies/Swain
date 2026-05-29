@@ -34,6 +34,13 @@ def test_config_round_trips_setup_choices(tmp_path: Path) -> None:
     assert "Codex CLI: custom-codex-model" in loaded.worker_summary()
 
 
+def test_config_defaults_to_no_cli_wall_clock_timeout(tmp_path: Path) -> None:
+    loaded = SwainConfig.load(MemoryStore(tmp_path))
+
+    assert loaded.cli_task_timeout_s == 0
+    assert loaded.cli_timeout_label() == "none"
+
+
 def test_setup_completed_treats_invalid_config_as_incomplete(tmp_path: Path) -> None:
     config_path = tmp_path / ".swain" / "config.yaml"
     config_path.parent.mkdir()
@@ -98,6 +105,21 @@ async def test_run_setup_can_use_noninteractive_defaults(tmp_path: Path) -> None
     assert saved.concurrency == "careful"
     assert saved.cli_task_timeout_s == 840
     assert not (tmp_path / ".swain" / "profile.yaml").exists()
+
+
+@pytest.mark.asyncio
+async def test_run_setup_can_disable_cli_timeout(tmp_path: Path) -> None:
+    await run_setup(
+        tmp_path,
+        worker_mode="codex",
+        codex_model="default",
+        cli_task_timeout_s=0,
+        interactive=False,
+        init_profile=False,
+    )
+
+    saved = SwainConfig.load(MemoryStore(tmp_path))
+    assert saved.cli_task_timeout_s == 0
 
 
 @pytest.mark.asyncio
