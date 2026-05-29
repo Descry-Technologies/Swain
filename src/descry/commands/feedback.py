@@ -9,6 +9,7 @@ from rich.console import Console
 from descry.memory.store import MemoryStore
 from descry.memory.conventions import ConventionStore
 from descry.memory.calibration import CalibrationStore
+from descry.commands.history import lookup_finding
 from descry.models import FeedbackEvent
 
 console = Console()
@@ -58,45 +59,24 @@ async def run_feedback(repo_root: Path, finding_id: str, action: str, comment: s
 
 
 def _lookup_rule(store: MemoryStore, finding_id: str) -> str | None:
-    import json
-    for f in sorted(store.history_dir.glob("*.json"), reverse=True)[:5]:
-        try:
-            data = json.loads(f.read_text())
-            for finding in data.get("findings", []):
-                if finding.get("id", "").startswith(finding_id[:8]):
-                    return finding.get("rule")
-        except Exception:
-            pass
-    return None
+    finding = lookup_finding(store, finding_id)
+    return finding.get("rule") if finding else None
 
 
 def _lookup_file_glob(store: MemoryStore, finding_id: str) -> str | None:
-    import json
-    for f in sorted(store.history_dir.glob("*.json"), reverse=True)[:5]:
-        try:
-            data = json.loads(f.read_text())
-            for finding in data.get("findings", []):
-                if finding.get("id", "").startswith(finding_id[:8]):
-                    ev = finding.get("evidence", {})
-                    fp = ev.get("file", "")
-                    # Convert to glob: src/components/Foo.tsx -> src/components/**
-                    parts = fp.split("/")
-                    if len(parts) > 1:
-                        return "/".join(parts[:-1]) + "/**"
-                    return "**"
-        except Exception:
-            pass
-    return None
+    finding = lookup_finding(store, finding_id)
+    if not finding:
+        return None
+
+    ev = finding.get("evidence", {})
+    fp = ev.get("file", "")
+    # Convert to glob: src/components/Foo.tsx -> src/components/**
+    parts = fp.split("/")
+    if len(parts) > 1:
+        return "/".join(parts[:-1]) + "/**"
+    return "**"
 
 
 def _lookup_severity(store: MemoryStore, finding_id: str) -> str | None:
-    import json
-    for f in sorted(store.history_dir.glob("*.json"), reverse=True)[:5]:
-        try:
-            data = json.loads(f.read_text())
-            for finding in data.get("findings", []):
-                if finding.get("id", "").startswith(finding_id[:8]):
-                    return finding.get("severity")
-        except Exception:
-            pass
-    return None
+    finding = lookup_finding(store, finding_id)
+    return finding.get("severity") if finding else None

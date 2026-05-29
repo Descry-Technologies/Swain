@@ -189,11 +189,16 @@ def _to_markdown(findings: list[Finding], secret_hits: list, run_id: str) -> str
 
 def _save_history(store: MemoryStore, run_id: str, findings: list[Finding]) -> None:
     import json as _json
+    timestamp = datetime.utcnow()
     record = {
         "run_id": run_id,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": timestamp.isoformat(),
         "finding_count": len(findings),
         "severities": {s.value: sum(1 for f in findings if f.severity == s) for s in Severity},
     }
-    path = store.history_dir / f"{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}-{run_id}.json"
+    path = store.history_dir / f"{timestamp.strftime('%Y%m%d-%H%M%S')}-{run_id}.json"
     path.write_text(_json.dumps(record, indent=2))
+
+    findings_path = store.history_dir / f"{run_id}-findings.json"
+    payload = [finding.model_dump(mode="json") for finding in findings]
+    findings_path.write_text(_json.dumps(payload, indent=2))

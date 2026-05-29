@@ -1,0 +1,25 @@
+app_purpose: ''
+db:
+- postgres
+deploy_target: ''
+deps:
+- '@supabase/supabase-js'
+- name
+- next
+- react
+- react-dom
+- stripe
+frameworks:
+- next
+- react
+- supabase
+- stripe
+has_auth: true
+has_file_upload: true
+has_llm_features: false
+has_payments: true
+inferred_threat_model: []
+languages:
+- TypeScript
+repo_name: nextjs-supabase
+user_priorities: []

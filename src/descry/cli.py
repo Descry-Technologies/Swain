@@ -60,6 +60,16 @@ def feedback(
 
 
 @app.command()
+def fix(
+    finding_id: str = typer.Argument(..., help="Finding ID"),
+    path: str = typer.Option(None, "--path", "-p", help="Repo path"),
+) -> None:
+    """Generate a Codex patch suggestion for a finding without applying it."""
+    from descry.commands.fix import run_fix
+    asyncio.run(run_fix(_get_repo_root(path), finding_id=finding_id))
+
+
+@app.command()
 def status(
     path: str = typer.Argument(None, help="Repo path"),
 ) -> None:
