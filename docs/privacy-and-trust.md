@@ -129,5 +129,5 @@ trust.
 
 Do not commit `.swain/.local/`.
 
-Do not put real secrets in demo assets, fixtures, issue reports, or Product Hunt
+Do not put real secrets in demo assets, fixtures, issue reports, or public
 media. Use `examples/launchpad-saas` for public reproduction and screenshots.

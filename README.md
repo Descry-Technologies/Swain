@@ -54,8 +54,8 @@ swain launch-card --out swain-launch-card.svg
 ```
 
 The card is a 1200x630 SVG built from local scan history. It is designed for
-LinkedIn posts, Product Hunt gallery prep, and launch updates without exposing
-raw worker logs or source code.
+public updates and project handoffs without exposing raw worker logs or source
+code.
 
 `doctor` checks repo setup, bundled playbooks, local package hygiene, and your
 Claude/Codex CLIs. If a worker is missing, out of quota, or unauthenticated,
