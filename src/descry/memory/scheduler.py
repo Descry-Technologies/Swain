@@ -1,5 +1,5 @@
 """
-Self-scheduling system — manages .descry/.local/schedule.yaml.
+Self-scheduling system — manages .swain/.local/schedule.yaml.
 Recomputed after every 10 runs based on risk signals (NOT stored in git).
 
 Risk signals (event-driven, not count-driven per GPT-5.5 critique):
@@ -20,7 +20,7 @@ Frequency tiers:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from descry.memory.store import MemoryStore
@@ -63,7 +63,7 @@ class ScheduleStore:
         self._data = self._store.read_yaml(self._store.schedule_path)
         if "schedules" not in self._data:
             self._data = {
-                "generated_at": datetime.utcnow().isoformat(),
+                "generated_at": datetime.now(UTC).isoformat(),
                 "runs_since_last_recompute": 0,
                 "schedules": DEFAULT_SCHEDULE,
             }
@@ -74,10 +74,15 @@ class ScheduleStore:
             self._store.write_yaml(self._store.schedule_path, self._data)
 
     def get_schedules_for_trigger(self, trigger: str) -> list[dict]:
-        return [s for s in self._data.get("schedules", []) if s.get("trigger") == trigger]
+        return [
+            s for s in self._data.get("schedules", [])
+            if s.get("trigger") == trigger
+        ]
 
     def increment_run_count(self) -> int:
-        self._data["runs_since_last_recompute"] = self._data.get("runs_since_last_recompute", 0) + 1
+        self._data["runs_since_last_recompute"] = (
+            self._data.get("runs_since_last_recompute", 0) + 1
+        )
         self._save()
         return self._data["runs_since_last_recompute"]
 
@@ -87,7 +92,7 @@ class ScheduleStore:
     def apply_recompute(self, new_schedules: list[dict]) -> None:
         self._data["schedules"] = new_schedules
         self._data["runs_since_last_recompute"] = 0
-        self._data["generated_at"] = datetime.utcnow().isoformat()
+        self._data["generated_at"] = datetime.now(UTC).isoformat()
         self._save()
 
     def upsert_risk_trigger(self, playbook: str, paths: list[str], reason: str) -> None:
@@ -95,11 +100,16 @@ class ScheduleStore:
         schedules = self._data.get("schedules", [])
         existing = next((s for s in schedules if s["playbook"] == playbook), None)
         if existing:
-            if existing.get("trigger") == "monthly" or existing.get("trigger") == "weekly":
+            if existing.get("trigger") in ("monthly", "weekly"):
                 existing["trigger"] = "on_commit"
                 existing["paths"] = paths
                 existing["reason"] = reason
-                existing["escalated_at"] = datetime.utcnow().isoformat()
+                existing["escalated_at"] = datetime.now(UTC).isoformat()
         else:
-            schedules.append({"playbook": playbook, "trigger": "on_commit", "paths": paths, "reason": reason})
+            schedules.append({
+                "playbook": playbook,
+                "trigger": "on_commit",
+                "paths": paths,
+                "reason": reason,
+            })
         self._save()

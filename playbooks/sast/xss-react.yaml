@@ -1,6 +1,6 @@
 id: sast.xss.react
 version: 1
-author: descry
+author: swain
 description: Detect XSS vulnerabilities in React and Next.js applications.
 worker: claude
 output_schema: finding.v1
@@ -18,12 +18,16 @@ files:
     - "**/*.js"
   exclude:
     - "**/node_modules/**"
+    - ".claude/**"
+    - "**/.claude/**"
+    - ".swain/**"
+    - "**/.swain/**"
     - "**/*.test.*"
     - "**/*.spec.*"
     - "**/__tests__/**"
     - "**/dist/**"
     - "**/.next/**"
-  max_files: 60
+  max_files: 30
 prompt: |
   {{learned_context}}
 
@@ -52,7 +56,7 @@ prompt: |
   - What is the exploit scenario?
   - Is this endpoint exposed to unauthenticated users?
 
-  FILES TO AUDIT:
+  Read each of the following files using your file reading tools, then audit them:
   {{file_list}}
 
   Report findings with:

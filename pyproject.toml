@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "descry"
+name = "swain"
 version = "0.1.0"
-description = "Autonomous AI security lead for vibe coders — runs on your existing Claude and Codex subscriptions"
+description = "Local AI security lead for vibe coders — runs on your existing Claude and Codex subscriptions"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
@@ -39,11 +39,27 @@ dev = [
     "types-aiofiles",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "types-PyYAML",
+    "types-aiofiles",
+]
+
 [project.scripts]
-descry = "descry.cli:app"
+swain = "descry.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/descry"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"playbooks" = "playbooks"
+"schemas" = "schemas"
+"examples" = "examples"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -52,6 +68,10 @@ testpaths = ["tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "S", "B"]
 ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"examples/launchpad-saas/**/*.py" = ["B008", "S105", "S608"]
+"tests/fixtures/repos/**/*.py" = ["B008", "S608"]
 
 [tool.mypy]
 python_version = "3.11"

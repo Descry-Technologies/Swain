@@ -1,5 +1,5 @@
-"""Descry TUI package."""
+"""Swain TUI package."""
 
-from descry.tui.app import DescryApp
+from descry.tui.app import SwainApp
 
-__all__ = ["DescryApp"]
+__all__ = ["SwainApp"]

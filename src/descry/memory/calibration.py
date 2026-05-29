@@ -8,7 +8,6 @@ After N>=10 events, re-ranks displayed severity.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from descry.memory.store import MemoryStore
 

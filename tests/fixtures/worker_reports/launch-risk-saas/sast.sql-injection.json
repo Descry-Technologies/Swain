@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "partial": false,
+  "findings": [
+    {
+      "rule": "sast.sql-injection",
+      "severity": "high",
+      "confidence": 0.96,
+      "title": "User search query is interpolated into SQL",
+      "description": "search_users builds a SQL string with tenant_id and query inside an f-string. The query value can alter the WHERE clause.",
+      "evidence": {
+        "file": "backend/app/db/queries.py",
+        "line_start": 1,
+        "anchor": "search_users"
+      },
+      "exploitability": {
+        "requires_auth": true,
+        "requires_interaction": false,
+        "network_exposed": true,
+        "assessment": "An authenticated user can read or manipulate user records outside the intended search."
+      },
+      "remediation": {
+        "summary": "Use parameter binding for tenant_id and query, and construct the LIKE pattern as a bound value."
+      }
+    }
+  ]
+}

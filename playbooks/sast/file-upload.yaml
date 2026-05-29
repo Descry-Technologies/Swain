@@ -1,0 +1,69 @@
+id: sast.file-upload
+version: 1
+author: swain
+description: Detect insecure file upload handling in frontend and backend code.
+worker: claude
+output_schema: finding.v1
+timeout_s: 150
+applies_when:
+  has_file_upload: true
+files:
+  include:
+    - "**/api/**"
+    - "**/routes/**"
+    - "**/server/**"
+    - "**/services/**"
+    - "**/uploads/**"
+    - "**/*.py"
+    - "**/*.ts"
+    - "**/*.tsx"
+    - "**/*.js"
+  exclude:
+    - "**/node_modules/**"
+    - ".claude/**"
+    - "**/.claude/**"
+    - ".swain/**"
+    - "**/.swain/**"
+    - "**/dist/**"
+    - "**/build/**"
+    - "**/.next/**"
+    - "**/tests/**"
+    - "**/test_*.py"
+    - "**/*.test.*"
+    - "**/*.spec.*"
+    - "**/fixtures/**"
+  max_files: 15
+prompt: |
+  {{learned_context}}
+
+  You are auditing file upload and import flows.
+
+  WHAT TO FIND:
+  1. Upload endpoints without authentication or tenant authorization
+  2. Path traversal through filenames, paths, archive entries, or object keys
+  3. Writing uploaded content into executable/static directories without strict validation
+  4. Missing size limits, count limits, or streaming safeguards that enable denial of service
+  5. Trusting Content-Type, file extension, or client-side validation without server-side checks
+  6. Insecure archive extraction, CSV/import parsing, or document processing
+  7. Publicly readable uploads that contain private tenant/user data
+
+  WHAT IS SAFE:
+  - Client-side file input restrictions are helpful but not sufficient by themselves
+  - Generated server-side filenames are safe when they cannot escape the intended storage root
+  - Public uploads are safe only when the product intentionally exposes them and access is authorized
+
+  ACCEPTED PATTERNS IN THIS REPO:
+  {{accepted_patterns}}
+
+  Read each of the following files using your file reading tools, then audit them:
+  {{file_list}}
+
+  For each finding:
+  - Identify the route/function and the untrusted file attribute or content
+  - Explain how an attacker would exploit it
+  - State the impact: data exposure, code execution, stored XSS, overwrite, or denial of service
+  - Suggest the specific server-side fix
+
+  severity=critical for remote code execution or unauthenticated sensitive data exposure
+  severity=high for arbitrary overwrite, path traversal, or cross-tenant file access
+  severity=medium for missing size/type controls with practical abuse potential

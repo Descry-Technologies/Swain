@@ -1,8 +1,8 @@
 """
-MemoryStore — top-level interface to .descry/ directory.
+MemoryStore — top-level interface to .swain/ directory.
 
 Layout:
-  .descry/
+  .swain/
     config.yaml          <- user-edited, committable
     profile.yaml         <- auto-learned project facts, committable
     conventions.yaml     <- accepted patterns, committable
@@ -27,7 +27,7 @@ from filelock import FileLock
 
 class MemoryStore:
     def __init__(self, repo_root: Path) -> None:
-        self.root = repo_root / ".descry"
+        self.root = repo_root / ".swain"
         self.local = self.root / ".local"
         self._ensure_dirs()
         self._write_gitignore()

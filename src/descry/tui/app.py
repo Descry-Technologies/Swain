@@ -1,5 +1,5 @@
 """
-Descry TUI — interactive agent interface.
+Swain TUI — interactive agent interface.
 
 The agent feels human because:
 1. Characters stream with variable timing (punctuation pauses, sentence pauses)
@@ -13,19 +13,18 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
-from textual.widget import Widget
 from textual.widgets import Input, RichLog, Static
 
+from descry.resources import builtin_playbooks_dir
 from descry.tui.voice import AgentVoice
-
 
 # ── Typewriter timing ────────────────────────────────────────────────────────
 
@@ -36,7 +35,7 @@ _PERIOD_DELAY = 0.22    # pause after sentence-ending punctuation
 _NEWLINE_DELAY = 0.15   # pause between lines
 
 
-async def _typewrite(log: "ChatLog", text: str) -> None:
+async def _typewrite(log: ChatLog, text: str) -> None:
     """Stream text with human-like variable timing."""
     lines = text.split("\n")
     for li, line in enumerate(lines):
@@ -76,7 +75,7 @@ class ChatLog(RichLog):
     """
 
     def agent_label(self) -> None:
-        self.write("[bold #00d4aa]Descry[/]")
+        self.write("[bold #00d4aa]Swain[/]")
 
     def user_label(self, text: str) -> None:
         self.write(f"[#555555]you  [#888888]{text}[/]")
@@ -86,7 +85,7 @@ class ChatLog(RichLog):
         self.write(f"  [italic #444444]{text}[/]")
 
 
-class Sidebar(Widget):
+class Sidebar(Vertical):
     DEFAULT_CSS = """
     Sidebar {
         background: #0a0a0a;
@@ -104,7 +103,7 @@ class Sidebar(Widget):
     last_run: reactive[str] = reactive("never")
 
     def compose(self) -> ComposeResult:
-        yield Static("[bold #00d4aa]Descry[/]\n", id="sb-brand")
+        yield Static("[bold #00d4aa]Swain[/]\n", id="sb-brand")
         yield Static("", id="sb-project")
         yield Static("", id="sb-stack")
         yield Static("", id="sb-surfaces")
@@ -113,9 +112,9 @@ class Sidebar(Widget):
         yield Static("", id="sb-last-run")
 
     def on_mount(self) -> None:
-        self._render()
+        self._refresh_rows()
 
-    def _render(self) -> None:
+    def _refresh_rows(self) -> None:
         def row(wid: str, label: str, val: str) -> None:
             self.query_one(f"#{wid}", Static).update(
                 f"[#555555]{label}[/]\n[#cccccc]{val or '—'}[/]\n"
@@ -123,23 +122,28 @@ class Sidebar(Widget):
         row("sb-project",     "project",    self.project_name)
         row("sb-stack",       "stack",      self.stack)
         row("sb-surfaces",    "surfaces",   self.surfaces)
-        row("sb-findings",    "findings",   str(self.finding_count) if self.finding_count else "none open")
-        row("sb-conventions", "learned",    f"{self.convention_count} convention{'s' if self.convention_count != 1 else ''}")
+        findings_label = str(self.finding_count) if self.finding_count else "none open"
+        convention_label = (
+            f"{self.convention_count} "
+            f"convention{'s' if self.convention_count != 1 else ''}"
+        )
+        row("sb-findings",    "findings",   findings_label)
+        row("sb-conventions", "learned",    convention_label)
         row("sb-last-run",    "last scan",  self.last_run)
 
-    def watch_project_name(self, _: str) -> None: self._render()
-    def watch_stack(self, _: str) -> None: self._render()
-    def watch_surfaces(self, _: str) -> None: self._render()
-    def watch_finding_count(self, _: int) -> None: self._render()
-    def watch_convention_count(self, _: int) -> None: self._render()
-    def watch_last_run(self, _: str) -> None: self._render()
+    def watch_project_name(self, _: str) -> None: self._refresh_rows()
+    def watch_stack(self, _: str) -> None: self._refresh_rows()
+    def watch_surfaces(self, _: str) -> None: self._refresh_rows()
+    def watch_finding_count(self, _: int) -> None: self._refresh_rows()
+    def watch_convention_count(self, _: int) -> None: self._refresh_rows()
+    def watch_last_run(self, _: str) -> None: self._refresh_rows()
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
-class DescryApp(App):
+class SwainApp(App):
     CSS_PATH = Path(__file__).parent / "theme.tcss"
-    TITLE = "Descry"
+    TITLE = "Swain"
 
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit", show=True),
@@ -150,25 +154,26 @@ class DescryApp(App):
         super().__init__()
         self.repo_path = repo_path or Path.cwd()
         self.voice = AgentVoice()
-        self._agent: DescryAgent | None = None
+        self._agent: SwainAgent | None = None
 
     def compose(self) -> ComposeResult:
         yield Static(
-            f"[dim]Descry[/]  [#00d4aa]●[/]  {self.repo_path.name}",
+            f"[dim]Swain[/]  [#00d4aa]●[/]  {self.repo_path.name}",
             id="status-bar",
         )
         with Horizontal(id="main"):
             yield ChatLog(id="chat-log", markup=True, highlight=False, wrap=True)
             yield Sidebar(id="sidebar")
-        yield Input(placeholder="Ask Descry anything...", id="message-input")
+        yield Input(placeholder="Ask Swain anything...", id="message-input")
         yield Static(
-            "[#333333]ctrl+c exit  ·  /scan  ·  /fix <id>  ·  /feedback <id> fp  ·  /status[/]",
+            "[#333333]ctrl+c exit  ·  /scan  ·  /fix <id>  ·  "
+            "/feedback <id> fp  ·  /status[/]",
             id="footer",
         )
 
     async def on_mount(self) -> None:
         self.query_one("#message-input", Input).focus()
-        self._agent = DescryAgent(self)
+        self._agent = SwainAgent(self)
         # Run greeting in background so UI renders first
         self.run_worker(self._agent.start(), exclusive=True, name="greeting")
 
@@ -197,7 +202,7 @@ class DescryApp(App):
 
 # ── Agent ─────────────────────────────────────────────────────────────────────
 
-class DescryAgent:
+class SwainAgent:
     """
     All agent logic lives here.
 
@@ -207,7 +212,7 @@ class DescryAgent:
     - Findings are surfaced with opinions, not just listed
     """
 
-    def __init__(self, app: DescryApp) -> None:
+    def __init__(self, app: SwainApp) -> None:
         self.app = app
         self.voice = app.voice
         self.repo_path = app.repo_path
@@ -223,19 +228,31 @@ class DescryAgent:
     async def start(self) -> None:
         self._load_memory()
         open_findings = self._count_open_findings()
-        msg = self.voice.greeting(self._profile, self._last_run_ts(), open_findings)
+        msg = self.voice.greeting(
+            self._profile,
+            repo_name=self.repo_path.name,
+            last_run_ts=self._last_run_ts(),
+            open_findings=open_findings,
+        )
         await self._stream(msg)
         self._refresh_sidebar()
 
     def _load_memory(self) -> None:
         try:
-            from descry.memory.store import MemoryStore
-            from descry.memory.profile import ProjectProfile
             from descry.memory.conventions import ConventionStore
+            from descry.memory.profile import ProjectProfile
+            from descry.memory.store import MemoryStore
+
+            profile_path = self.repo_path / ".swain" / "profile.yaml"
+            if not profile_path.exists():
+                self._profile = None
+                self._conventions = None
+                self._memory = None
+                return
+
             self._memory = MemoryStore(self.repo_path)
-            if (self._memory.root / "profile.yaml").exists():
-                self._profile = ProjectProfile.load(self._memory)
-                self._conventions = ConventionStore(self._memory)
+            self._profile = ProjectProfile.load(self._memory)
+            self._conventions = ConventionStore(self._memory)
         except Exception:
             self._profile = None
             self._conventions = None
@@ -271,6 +288,11 @@ class DescryAgent:
 
     async def _handle_natural(self, text: str) -> None:
         """Use claude to interpret the intent, then route to the right action."""
+        local_answer = self._try_local_answer(text)
+        if local_answer:
+            await self._say(local_answer)
+            return
+
         if not shutil.which("claude"):
             await self._say(self.voice.unknown_command(text))
             return
@@ -280,7 +302,7 @@ class DescryAgent:
             f"{m['role']}: {m['content']}" for m in self._session[-6:]
         )
         nlu_prompt = f"""\
-You are the intent classifier for a security agent called Descry.
+You are the intent classifier for a security agent called Swain.
 Given the conversation history and the latest user message, classify the intent.
 
 Conversation:
@@ -296,7 +318,11 @@ Respond with ONLY one of these JSON objects:
 """
         try:
             proc = await asyncio.create_subprocess_exec(
-                "claude", "--no-interactive", "--output-format", "text", "-p", nlu_prompt,
+                "claude",
+                "--output-format",
+                "text",
+                "-p",
+                nlu_prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -305,7 +331,7 @@ Respond with ONLY one of these JSON objects:
             # Extract JSON
             s, e = raw.find("{"), raw.rfind("}")
             if s != -1 and e != -1:
-                data = json.loads(raw[s:e+1])
+                data = json.loads(raw[s : e + 1])
                 intent = data.get("intent", "unknown")
                 if intent == "scan":
                     await self._do_scan()
@@ -323,7 +349,8 @@ Respond with ONLY one of these JSON objects:
                     await self._do_explain(data.get("topic", text))
                     return
         except Exception:
-            pass
+            await self._say(self.voice.unknown_command(text))
+            return
 
         await self._say(self.voice.unknown_command(text))
 
@@ -346,8 +373,10 @@ Respond with ONLY one of these JSON objects:
             findings, secret_hits = await asyncio.wait_for(
                 self._run_scan_async(), timeout=300
             )
-        except asyncio.TimeoutError:
-            await self._say("Scan timed out. Try on a smaller repo or check the workers.")
+        except TimeoutError:
+            await self._say(
+                "Scan timed out. Try on a smaller repo or check the workers."
+            )
             return
         except Exception as e:
             await self._say(f"Something went wrong: {e}")
@@ -371,6 +400,11 @@ Respond with ONLY one of these JSON objects:
                 await asyncio.sleep(0.3)
                 await self._say(opinion)
 
+        next_step = self.voice.scan_next_step(findings, secret_hits)
+        if next_step:
+            await asyncio.sleep(0.2)
+            await self._say(next_step)
+
         self._load_memory()
         self._refresh_sidebar()
 
@@ -381,7 +415,7 @@ Respond with ONLY one of these JSON objects:
         await self._say(
             f"Asking Codex to patch `{finding_id[:8]}`...\n\n"
             f"Run in your terminal for the full diff:\n"
-            f"  descry fix {finding_id}"
+            f"  swain fix {finding_id}"
         )
 
     async def _do_feedback(self, finding_id: str, action: str) -> None:
@@ -402,19 +436,29 @@ Respond with ONLY one of these JSON objects:
             await self._say("No project here yet. Run /scan to get started.")
             return
         from descry.memory.scheduler import ScheduleStore
-        conv = len(self._conventions.get_active_conventions()) if self._conventions else 0
+        conv = (
+            len(self._conventions.get_active_conventions())
+            if self._conventions
+            else 0
+        )
         sched = 0
         runs: list[dict] = []
         if self._memory:
             try:
                 s = ScheduleStore(self._memory)
                 sched = len(s._data.get("schedules", []))
-                for f in sorted(self._memory.history_dir.glob("*.json"), reverse=True)[:3]:
+                history_files = sorted(
+                    self._memory.history_dir.glob("*.json"),
+                    reverse=True,
+                )
+                for f in history_files[:3]:
                     if "findings" not in f.name:
                         runs.append(json.loads(f.read_text()))
             except Exception:
-                pass
-        await self._stream(self.voice.status_narrative(self._profile, conv, sched, runs))
+                runs = []
+        await self._stream(
+            self.voice.status_narrative(self._profile, conv, sched, runs)
+        )
 
     async def _do_init(self) -> None:
         await self._say("Scanning the repo...")
@@ -424,7 +468,11 @@ Respond with ONLY one of these JSON objects:
             from descry.commands.init import run_init
             await run_init(self.repo_path, use_llm=True)
             self._load_memory()
-            stack = ", ".join((self._profile.frameworks or self._profile.languages)[:3]) if self._profile else "unknown"
+            stack = (
+                ", ".join((self._profile.frameworks or self._profile.languages)[:3])
+                if self._profile
+                else "unknown"
+            )
             await self._say(f"Done. Detected {stack}. Type /scan to start.")
             self._refresh_sidebar()
         except Exception as e:
@@ -440,12 +488,17 @@ Respond with ONLY one of these JSON objects:
         log.system_line("thinking...")
 
         prompt = (
-            f"You are Descry, a security agent. Answer this question from a developer in plain English. "
-            f"Be direct and practical. Max 4 sentences. No bullet points.\n\nQuestion: {topic}"
+            "You are Swain, a security agent. Answer this question from a "
+            "developer in plain English. Be direct and practical. Max 4 "
+            f"sentences. No bullet points.\n\nQuestion: {topic}"
         )
         try:
             proc = await asyncio.create_subprocess_exec(
-                "claude", "--no-interactive", "--output-format", "text", "-p", prompt,
+                "claude",
+                "--output-format",
+                "text",
+                "-p",
+                prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -455,19 +508,12 @@ Respond with ONLY one of these JSON objects:
                 await self._stream(answer)
                 return
         except Exception:
-            pass
+            await self._say(self.voice.unknown_command(topic))
+            return
         await self._say(self.voice.unknown_command(topic))
 
     async def _do_help(self) -> None:
-        await self._stream(
-            "/scan                 run a full security scan\n"
-            "/fix <id>             ask Codex to patch a finding\n"
-            "/feedback <id> fp     mark a finding as a false positive\n"
-            "/feedback <id> fix    mark a finding as fixed\n"
-            "/status               show what I know about this project\n"
-            "/init                 (re)initialize the project profile\n\n"
-            "You can also just talk to me — I'll do my best."
-        )
+        await self._stream(self.voice.help_text())
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -491,23 +537,59 @@ Respond with ONLY one of these JSON objects:
         try:
             from descry.playbooks.loader import PlaybookLoader
             from descry.scanners.inventory import RepoInventory
-            builtin = Path(__file__).parent.parent.parent.parent / "playbooks"
-            loader = PlaybookLoader(builtin_dir=builtin)
+            loader = PlaybookLoader(builtin_dir=builtin_playbooks_dir())
             inv = RepoInventory.scan(self.repo_path)
             return len(loader.filter_applicable(loader.load_all(), inv))
         except Exception:
             return 3
 
+    def _try_local_answer(self, text: str) -> str:
+        lowered = text.strip().lower()
+        if not lowered:
+            return ""
+
+        priority_phrases = (
+            "what should i fix",
+            "fix first",
+            "prioritize",
+            "highest risk",
+            "most important",
+        )
+        if any(phrase in lowered for phrase in priority_phrases):
+            if self._last_findings:
+                return "\n\n".join(
+                    part for part in [
+                        self.voice.findings_summary_opinion(self._last_findings),
+                        self.voice.scan_next_step(self._last_findings, 0),
+                    ] if part
+                )
+            return "Run /scan first. I need fresh findings before I can rank anything."
+
+        if "launch" in lowered or "ship" in lowered or "market" in lowered:
+            return (
+                "Before shipping, I want a clean pass on auth, payments, uploads, "
+                "secrets, and tenant/data access. Run /scan, then fix anything "
+                "critical or high before you trust the launch."
+            )
+
+        return ""
+
     def _count_open_findings(self) -> int:
         if not self._memory:
             return 0
         try:
-            files = sorted(self._memory.history_dir.glob("*-findings.json"), reverse=True)
+            files = sorted(
+                self._memory.history_dir.glob("*-findings.json"),
+                reverse=True,
+            )
             if files:
                 data = json.loads(files[0].read_text())
-                return len([f for f in data if f.get("lifecycle", {}).get("status") == "open"])
+                return len([
+                    f for f in data
+                    if f.get("lifecycle", {}).get("status") == "open"
+                ])
         except Exception:
-            pass
+            return 0
         return 0
 
     def _last_run_ts(self) -> str | None:
@@ -522,7 +604,10 @@ Respond with ONLY one of these JSON objects:
                 data = json.loads(runs[0].read_text())
                 ts = data.get("timestamp", "")
                 if ts:
-                    delta = datetime.utcnow() - datetime.fromisoformat(ts)
+                    parsed = datetime.fromisoformat(ts)
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=UTC)
+                    delta = datetime.now(UTC) - parsed
                     mins = int(delta.total_seconds() / 60)
                     if mins < 60:
                         return f"{mins}m ago"
@@ -530,7 +615,7 @@ Respond with ONLY one of these JSON objects:
                         return f"{mins // 60}h ago"
                     return f"{delta.days}d ago"
         except Exception:
-            pass
+            return None
         return None
 
     def _refresh_sidebar(self) -> None:
@@ -549,7 +634,11 @@ Respond with ONLY one of these JSON objects:
                 ("llm", p.has_llm_features), ("uploads", p.has_file_upload),
             ] if v
         ) or "none detected"
-        conv = len(self._conventions.get_active_conventions()) if self._conventions else 0
+        conv = (
+            len(self._conventions.get_active_conventions())
+            if self._conventions
+            else 0
+        )
         self.app.update_sidebar(
             project_name=p.app_purpose or p.repo_name or self.repo_path.name,
             stack=stack,
@@ -560,21 +649,21 @@ Respond with ONLY one of these JSON objects:
         )
 
     async def _run_scan_async(self) -> tuple[list, int]:
-        from descry.memory.store import MemoryStore
-        from descry.memory.profile import ProjectProfile
-        from descry.memory.conventions import ConventionStore
+        from descry.commands.scan import _save_history
         from descry.memory.calibration import CalibrationStore
+        from descry.memory.conventions import ConventionStore
+        from descry.memory.profile import ProjectProfile
         from descry.memory.scheduler import ScheduleStore
+        from descry.memory.store import MemoryStore
+        from descry.orchestrator.executor import Executor
+        from descry.orchestrator.planner import Planner
+        from descry.orchestrator.pool import WorkerPool
+        from descry.playbooks.loader import PlaybookLoader
         from descry.scanners.inventory import RepoInventory
         from descry.scanners.secrets import SecretsScanner
-        from descry.playbooks.loader import PlaybookLoader
-        from descry.orchestrator.planner import Planner
-        from descry.orchestrator.executor import Executor
-        from descry.orchestrator.pool import WorkerPool
         from descry.workers.claude_worker import ClaudeWorker
         from descry.workers.codex_worker import CodexWorker
         from descry.workers.mock_worker import MockWorker
-        from descry.commands.scan import _save_history
 
         store = MemoryStore(self.repo_path)
         profile = ProjectProfile.load(store)
@@ -590,10 +679,19 @@ Respond with ONLY one of these JSON objects:
         pool.register(CodexWorker())
         pool.register(MockWorker())
 
-        builtin = Path(__file__).parent.parent.parent.parent / "playbooks"
-        loader = PlaybookLoader(builtin_dir=builtin, user_dir=store.root / "playbooks")
+        loader = PlaybookLoader(
+            builtin_dir=builtin_playbooks_dir(),
+            user_dir=store.root / "playbooks",
+        )
         mission = Planner(loader, schedule).plan("manual", inventory)
-        executor = Executor(pool, loader, profile, conventions, calibration, self.repo_path)
+        executor = Executor(
+            pool,
+            loader,
+            profile,
+            conventions,
+            calibration,
+            self.repo_path,
+        )
         findings = await executor.execute(mission)
 
         _save_history(store, mission.id, findings)

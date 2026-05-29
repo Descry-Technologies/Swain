@@ -1,0 +1,32 @@
+app_purpose: Public demo SaaS with intentional launch-risk vulnerabilities
+db:
+- postgres
+deploy_target: docker
+deps:
+- fastapi
+- python-jose
+- react
+- react-dom
+- sqlalchemy
+- stripe
+- uvicorn
+frameworks:
+- react
+- fastapi
+- stripe
+has_auth: true
+has_file_upload: true
+has_llm_features: false
+has_payments: true
+inferred_threat_model:
+- Cross-tenant access through path-controlled tenant IDs
+- Billing tampering through client-controlled Stripe metadata
+- Stored XSS through unsafe HTML preview rendering
+languages:
+- Python
+- TypeScript
+repo_name: launchpad-saas
+user_priorities:
+- fix auth and tenant boundary bugs before launch
+- verify billing webhooks and checkout trust boundaries
+- remove secrets and unsafe upload paths

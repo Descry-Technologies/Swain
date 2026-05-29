@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Callable
+from collections.abc import Callable
 
-from descry.workers.base import BaseWorker, WorkerResult
 from descry.models import Task, WorkerType
+from descry.workers.base import BaseWorker, WorkerResult
 
 
 class WorkerPool:
@@ -15,29 +15,105 @@ class WorkerPool:
         self._type_sems: dict[WorkerType, asyncio.Semaphore] = {}
         self._max_per_type = max_per_type
         self._workers: dict[WorkerType, BaseWorker] = {}
+        self._disabled_workers: set[WorkerType] = set()
 
     def register(self, worker: BaseWorker) -> None:
         self._workers[worker.worker_type] = worker
         self._type_sems[worker.worker_type] = asyncio.Semaphore(self._max_per_type)
 
     def get_worker(self, worker_type: WorkerType) -> BaseWorker | None:
-        w = self._workers.get(worker_type)
-        if w and w.is_available():
-            return w
-        # Fallback: if codex unavailable, use claude for fix gen too
-        if worker_type == WorkerType.CODEX:
-            return self._workers.get(WorkerType.CLAUDE)
-        return None
+        workers = self._candidate_workers(worker_type)
+        return workers[0] if workers else None
 
-    async def run_task(self, task: Task, prompt: str, files: list, repo_root) -> WorkerResult:
-        worker = self.get_worker(task.worker)
-        if worker is None:
+    async def run_task(
+        self,
+        task: Task,
+        prompt: str,
+        files: list,
+        repo_root,
+    ) -> WorkerResult:
+        workers = self._candidate_workers(task.worker)
+        if not workers:
             from descry.workers.mock_worker import MockWorker
-            worker = MockWorker()
+            workers = [MockWorker()]
 
-        type_sem = self._type_sems.get(worker.worker_type, asyncio.Semaphore(1))
-        async with self._global_sem, type_sem:
-            return await worker.run(task.id, prompt, files, repo_root)
+        last_result: WorkerResult | None = None
+        for worker in workers:
+            if worker.worker_type in self._disabled_workers:
+                continue
+            type_sem = self._type_sems.setdefault(
+                worker.worker_type,
+                asyncio.Semaphore(self._max_per_type),
+            )
+            async with self._global_sem, type_sem:
+                result = await worker.run(
+                    task.id,
+                    prompt,
+                    files,
+                    repo_root,
+                    playbook_id=task.playbook_id,
+                    playbook_version=int(task.context.get("playbook_version", 1)),
+                    timeout_s=int(task.context.get("timeout_s", worker.timeout_s)),
+                )
+            if result.report is not None:
+                return result
+            last_result = result
+            if self._should_disable_worker(result):
+                self._disabled_workers.add(worker.worker_type)
+            if not self._should_try_fallback(result):
+                break
+
+        if last_result is not None:
+            return last_result
+        return WorkerResult(
+            report=None,
+            exit_code=127,
+            parse_error="No available worker",
+        )
+
+    def _candidate_workers(self, worker_type: WorkerType) -> list[BaseWorker]:
+        order = [worker_type]
+        if worker_type == WorkerType.CLAUDE:
+            order.append(WorkerType.CODEX)
+        elif worker_type == WorkerType.CODEX:
+            order.append(WorkerType.CLAUDE)
+
+        workers: list[BaseWorker] = []
+        seen: set[WorkerType] = set()
+        for candidate_type in order:
+            if candidate_type in seen:
+                continue
+            seen.add(candidate_type)
+            if candidate_type in self._disabled_workers:
+                continue
+            worker = self._workers.get(candidate_type)
+            if worker and worker.is_available():
+                workers.append(worker)
+        return workers
+
+    def _should_try_fallback(self, result: WorkerResult) -> bool:
+        return result.report is None and (
+            result.timed_out
+            or bool(result.parse_error)
+            or result.exit_code != 0
+        )
+
+    def _should_disable_worker(self, result: WorkerResult) -> bool:
+        diagnostic = f"{result.parse_error}\n{result.stderr}".lower()
+        return any(
+            marker in diagnostic
+            for marker in (
+                "session limit",
+                "quota",
+                "rate limit",
+                "not authenticated",
+                "please authenticate",
+                "log in",
+                "login required",
+                "api key missing",
+                "invalid api key",
+            )
+        )
 
     async def run_tasks_parallel(
         self,

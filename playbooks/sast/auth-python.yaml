@@ -1,0 +1,63 @@
+id: sast.auth.python
+version: 1
+author: swain
+description: Detect auth and authorization issues in Python FastAPI/Flask backends.
+worker: claude
+output_schema: finding.v1
+timeout_s: 150
+applies_when:
+  any_dep:
+    - fastapi
+    - flask
+    - starlette
+    - uvicorn
+files:
+  include:
+    - "**/*.py"
+  exclude:
+    - ".claude/**"
+    - "**/.claude/**"
+    - ".swain/**"
+    - "**/.swain/**"
+    - "**/migrations/**"
+    - "**/alembic/**"
+    - "**/__pycache__/**"
+    - "**/tests/**"
+    - "**/test_*.py"
+  max_files: 10
+prompt: |
+  {{learned_context}}
+
+  You are auditing a Python web backend for authentication and authorization vulnerabilities.
+
+  WHAT TO FIND:
+  1. JWT tokens with weak secrets, long expiry (>1h for access tokens), or missing claim validation
+  2. Missing or bypassable authentication dependencies on routes that handle sensitive data
+  3. Broken object-level authorization — endpoints that take an ID from the request without
+     verifying the caller owns or has access to that resource (IDOR)
+  4. Hard-coded credentials, API keys, or secrets in source code
+  5. Insecure password handling (no hashing, weak hashing like MD5/SHA1)
+  6. Missing rate limiting on auth endpoints (login, token refresh, password reset)
+  7. Privilege escalation paths — users being able to elevate their own permissions
+  8. Token refresh logic that doesn't properly revoke old tokens
+
+  WHAT IS SAFE:
+  - JWT expiry > 1h is fine if it's a refresh token (they're meant to be long-lived)
+  - Auth checks implemented as FastAPI Depends() are legitimate patterns
+  - SQLAlchemy ORM queries are parameterized by default — not SQL injection
+
+  ACCEPTED PATTERNS IN THIS REPO:
+  {{accepted_patterns}}
+
+  Read each of the following files using your file reading tools, then audit them:
+  {{file_list}}
+
+  For each finding:
+  - Identify the exact function and line
+  - Explain the exploitability: who can exploit it and how
+  - Suggest the specific fix
+tests:
+  - fixture: auth_missing_dependency.py
+    expect_finding_count: 1
+  - fixture: auth_properly_protected.py
+    expect_finding_count: 0

@@ -1,6 +1,6 @@
 id: sast.sql-injection
 version: 1
-author: descry
+author: swain
 description: Detect SQL injection vulnerabilities across Python, TypeScript, and common ORMs.
 worker: claude
 output_schema: finding.v1
@@ -8,21 +8,29 @@ timeout_s: 120
 applies_when: {}
 files:
   include:
-    - "**/*.ts"
-    - "**/*.js"
-    - "**/*.py"
     - "**/api/**"
     - "**/server/**"
     - "**/routes/**"
     - "**/db/**"
+    - "**/services/**"
+    - "**/*.py"
+    - "**/*.ts"
+    - "**/*.js"
     - "**/lib/**"
   exclude:
     - "**/node_modules/**"
+    - ".claude/**"
+    - "**/.claude/**"
+    - ".swain/**"
+    - "**/.swain/**"
     - "**/*.test.*"
     - "**/*.spec.*"
+    - "**/tests/**"
+    - "**/test_*.py"
+    - "**/alembic/**"
     - "**/migrations/**"
     - "**/dist/**"
-  max_files: 60
+  max_files: 30
 prompt: |
   {{learned_context}}
 
@@ -52,7 +60,7 @@ prompt: |
   - Identify what data is at risk (PII, credentials, all records, etc.)
   - Provide the parameterized version as the fix
 
-  FILES TO AUDIT:
+  Read each of the following files using your file reading tools, then audit them:
   {{file_list}}
 
   severity=critical if the endpoint is unauthenticated and exposes sensitive data

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -18,7 +18,7 @@ class Severity(str, Enum):
     INFO = "info"
 
 
-class WorkerType(str, Enum):
+class WorkerType(StrEnum):
     CLAUDE = "claude"
     CODEX = "codex"
     SEMGREP = "semgrep"
@@ -27,7 +27,7 @@ class WorkerType(str, Enum):
     MOCK = "mock"
 
 
-class FindingStatus(str, Enum):
+class FindingStatus(StrEnum):
     OPEN = "open"
     FIXED = "fixed"
     WONTFIX = "wontfix"
@@ -70,8 +70,8 @@ class FindingLifecycle(BaseModel):
     status: FindingStatus = FindingStatus.OPEN
     introduced_commit: str | None = None
     fixed_commit: str | None = None
-    first_seen: datetime = Field(default_factory=datetime.utcnow)
-    last_seen: datetime = Field(default_factory=datetime.utcnow)
+    first_seen: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_seen: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class FindingSource(BaseModel):
@@ -127,14 +127,14 @@ class Task(BaseModel):
     files: list[str] = Field(default_factory=list)
     priority: int = 5
     context: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Mission(BaseModel):
     id: str
     trigger: str  # "cron", "pr", "push", "chat", "finding"
     tasks: list[Task] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
 
 
@@ -147,4 +147,4 @@ class FeedbackEvent(BaseModel):
     rule_version: int = 0
     worker: WorkerType | None = None
     model: str | None = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))

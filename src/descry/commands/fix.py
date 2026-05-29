@@ -1,4 +1,4 @@
-"""descry fix — ask Codex for a reviewed patch suggestion."""
+"""swain fix — ask Codex for a reviewed patch suggestion."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def _relevant_files(repo_root: Path, finding: dict) -> list[Path]:
 def _build_prompt(finding: dict) -> str:
     finding_json = json.dumps(finding, indent=2)
     return f"""\
-You are generating a minimal security fix for one Descry finding.
+You are generating a minimal security fix for one Swain finding.
 
 Return ONLY a unified diff patch suitable for review and `git apply`.
 Do not apply changes. Do not include markdown fences or explanatory text.

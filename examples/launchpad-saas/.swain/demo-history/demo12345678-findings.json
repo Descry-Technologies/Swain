@@ -1,0 +1,262 @@
+[
+  {
+    "schema_version": "1.0",
+    "id": "bee772558dd6f0ba",
+    "rule": "sast.payments",
+    "severity": "critical",
+    "confidence": 0.94,
+    "title": "Checkout trusts client-supplied price and tenant metadata",
+    "description": "The checkout route sends body.price_id and body.tenant_id directly to Stripe. A user can choose a cheaper price or another tenant's ID instead of the server mapping an allowed plan for the authenticated tenant.",
+    "cwe": null,
+    "owasp": null,
+    "evidence": {
+      "file": "backend/app/api/v1/billing.py",
+      "line_start": 15,
+      "line_end": null,
+      "anchor": "start_checkout",
+      "snippet_hash": null,
+      "data_flow": null,
+      "reachable_routes": []
+    },
+    "exploitability": {
+      "requires_auth": true,
+      "requires_interaction": false,
+      "network_exposed": true,
+      "assessment": "A logged-in user can tamper with billing state and paid access."
+    },
+    "remediation": {
+      "summary": "Map plan IDs to server-owned Stripe price IDs, derive tenant_id from the authenticated user, and reject client-supplied billing ownership metadata.",
+      "patch_diff": null,
+      "references": []
+    },
+    "suppression": {
+      "suppressed": false,
+      "reason": "",
+      "expires_at": null,
+      "suppressed_by": null,
+      "suppressed_at": null
+    },
+    "lifecycle": {
+      "status": "open",
+      "introduced_commit": null,
+      "fixed_commit": null,
+      "first_seen": "2026-05-29T16:45:00Z",
+      "last_seen": "2026-05-29T16:45:00Z"
+    },
+    "source": {
+      "worker": "claude",
+      "model": null,
+      "playbook": "sast.payments",
+      "playbook_version": 1,
+      "run_id": "demo12345678"
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "id": "75714357d5109d05",
+    "rule": "sast.payments",
+    "severity": "high",
+    "confidence": 0.92,
+    "title": "Webhook does not verify Stripe signature",
+    "description": "The webhook parses request JSON directly and trusts event metadata before upgrading tenant plan state. There is no stripe.Webhook.construct_event call or signature secret verification.",
+    "cwe": null,
+    "owasp": null,
+    "evidence": {
+      "file": "backend/app/api/v1/billing.py",
+      "line_start": 27,
+      "line_end": null,
+      "anchor": "stripe_webhook",
+      "snippet_hash": null,
+      "data_flow": null,
+      "reachable_routes": []
+    },
+    "exploitability": {
+      "requires_auth": false,
+      "requires_interaction": false,
+      "network_exposed": true,
+      "assessment": "Anyone who can reach the webhook can forge a checkout.session.completed event."
+    },
+    "remediation": {
+      "summary": "Verify the Stripe-Signature header with the webhook signing secret, enforce idempotency, and map provider customer/session IDs to tenants server-side.",
+      "patch_diff": null,
+      "references": []
+    },
+    "suppression": {
+      "suppressed": false,
+      "reason": "",
+      "expires_at": null,
+      "suppressed_by": null,
+      "suppressed_at": null
+    },
+    "lifecycle": {
+      "status": "open",
+      "introduced_commit": null,
+      "fixed_commit": null,
+      "first_seen": "2026-05-29T16:45:00Z",
+      "last_seen": "2026-05-29T16:45:00Z"
+    },
+    "source": {
+      "worker": "claude",
+      "model": null,
+      "playbook": "sast.payments",
+      "playbook_version": 1,
+      "run_id": "demo12345678"
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "id": "3243126adca47010",
+    "rule": "sast.file-upload",
+    "severity": "high",
+    "confidence": 0.95,
+    "title": "Upload route trusts tenant_id and raw filename",
+    "description": "The upload endpoint has no auth dependency, trusts tenant_id from the URL, and writes file.filename directly under UPLOAD_ROOT. A crafted filename can escape the intended tenant directory.",
+    "cwe": null,
+    "owasp": null,
+    "evidence": {
+      "file": "backend/app/api/v1/uploads.py",
+      "line_start": 10,
+      "line_end": null,
+      "anchor": "upload_file",
+      "snippet_hash": null,
+      "data_flow": null,
+      "reachable_routes": []
+    },
+    "exploitability": {
+      "requires_auth": false,
+      "requires_interaction": false,
+      "network_exposed": true,
+      "assessment": "A remote attacker can upload arbitrary content into another tenant path or traverse out of the upload root."
+    },
+    "remediation": {
+      "summary": "Authenticate the route, derive tenant_id from the caller, generate server-side filenames, normalize and confine paths, and enforce size/content limits.",
+      "patch_diff": null,
+      "references": []
+    },
+    "suppression": {
+      "suppressed": false,
+      "reason": "",
+      "expires_at": null,
+      "suppressed_by": null,
+      "suppressed_at": null
+    },
+    "lifecycle": {
+      "status": "open",
+      "introduced_commit": null,
+      "fixed_commit": null,
+      "first_seen": "2026-05-29T16:45:00Z",
+      "last_seen": "2026-05-29T16:45:00Z"
+    },
+    "source": {
+      "worker": "claude",
+      "model": null,
+      "playbook": "sast.file-upload",
+      "playbook_version": 1,
+      "run_id": "demo12345678"
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "id": "8db1dc6b36c17ecb",
+    "rule": "sast.sql-injection",
+    "severity": "high",
+    "confidence": 0.96,
+    "title": "User search query is interpolated into SQL",
+    "description": "search_users builds a SQL string with tenant_id and query inside an f-string. The query value can alter the WHERE clause.",
+    "cwe": null,
+    "owasp": null,
+    "evidence": {
+      "file": "backend/app/db/queries.py",
+      "line_start": 1,
+      "line_end": null,
+      "anchor": "search_users",
+      "snippet_hash": null,
+      "data_flow": null,
+      "reachable_routes": []
+    },
+    "exploitability": {
+      "requires_auth": true,
+      "requires_interaction": false,
+      "network_exposed": true,
+      "assessment": "An authenticated user can read or manipulate user records outside the intended search."
+    },
+    "remediation": {
+      "summary": "Use parameter binding for tenant_id and query, and construct the LIKE pattern as a bound value.",
+      "patch_diff": null,
+      "references": []
+    },
+    "suppression": {
+      "suppressed": false,
+      "reason": "",
+      "expires_at": null,
+      "suppressed_by": null,
+      "suppressed_at": null
+    },
+    "lifecycle": {
+      "status": "open",
+      "introduced_commit": null,
+      "fixed_commit": null,
+      "first_seen": "2026-05-29T16:45:00Z",
+      "last_seen": "2026-05-29T16:45:00Z"
+    },
+    "source": {
+      "worker": "claude",
+      "model": null,
+      "playbook": "sast.sql-injection",
+      "playbook_version": 1,
+      "run_id": "demo12345678"
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "id": "858f678ab4a46481",
+    "rule": "sast.xss.react",
+    "severity": "high",
+    "confidence": 0.9,
+    "title": "Preview renders unsanitized HTML",
+    "description": "The Preview component renders the html prop through dangerouslySetInnerHTML. If html comes from user content or an API response, scriptable markup can execute in the browser.",
+    "cwe": null,
+    "owasp": null,
+    "evidence": {
+      "file": "frontend/src/pages/Preview.tsx",
+      "line_start": 5,
+      "line_end": null,
+      "anchor": "Preview",
+      "snippet_hash": null,
+      "data_flow": null,
+      "reachable_routes": []
+    },
+    "exploitability": {
+      "requires_auth": false,
+      "requires_interaction": true,
+      "network_exposed": true,
+      "assessment": "A user-controlled preview payload can become stored or reflected XSS."
+    },
+    "remediation": {
+      "summary": "Sanitize html with a proven sanitizer such as DOMPurify before rendering, or render a safe structured format instead of raw HTML.",
+      "patch_diff": null,
+      "references": []
+    },
+    "suppression": {
+      "suppressed": false,
+      "reason": "",
+      "expires_at": null,
+      "suppressed_by": null,
+      "suppressed_at": null
+    },
+    "lifecycle": {
+      "status": "open",
+      "introduced_commit": null,
+      "fixed_commit": null,
+      "first_seen": "2026-05-29T16:45:00Z",
+      "last_seen": "2026-05-29T16:45:00Z"
+    },
+    "source": {
+      "worker": "claude",
+      "model": null,
+      "playbook": "sast.xss.react",
+      "playbook_version": 1,
+      "run_id": "demo12345678"
+    }
+  }
+]

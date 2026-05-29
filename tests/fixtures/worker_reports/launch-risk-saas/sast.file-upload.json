@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "partial": false,
+  "findings": [
+    {
+      "rule": "sast.file-upload",
+      "severity": "high",
+      "confidence": 0.95,
+      "title": "Upload route trusts tenant_id and raw filename",
+      "description": "The upload endpoint has no auth dependency, trusts tenant_id from the URL, and writes file.filename directly under UPLOAD_ROOT. A crafted filename can escape the intended tenant directory.",
+      "evidence": {
+        "file": "backend/app/api/v1/uploads.py",
+        "line_start": 10,
+        "anchor": "upload_file"
+      },
+      "exploitability": {
+        "requires_auth": false,
+        "requires_interaction": false,
+        "network_exposed": true,
+        "assessment": "A remote attacker can upload arbitrary content into another tenant path or traverse out of the upload root."
+      },
+      "remediation": {
+        "summary": "Authenticate the route, derive tenant_id from the caller, generate server-side filenames, normalize and confine paths, and enforce size/content limits."
+      }
+    }
+  ]
+}

@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://descry.dev/schemas/finding.v1.json",
+  "$id": "https://swain.dev/schemas/finding.v1.json",
   "title": "Finding",
-  "description": "A security finding produced by a Descry worker",
+  "description": "A security finding produced by a Swain worker",
   "type": "object",
   "required": ["schema_version", "id", "rule", "severity", "confidence", "title", "evidence"],
   "additionalProperties": false,

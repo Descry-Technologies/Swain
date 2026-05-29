@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "partial": false,
+  "findings": [
+    {
+      "rule": "sast.xss.react",
+      "severity": "high",
+      "confidence": 0.9,
+      "title": "Preview renders unsanitized HTML",
+      "description": "The Preview component renders the html prop through dangerouslySetInnerHTML. If html comes from user content or an API response, scriptable markup can execute in the browser.",
+      "evidence": {
+        "file": "frontend/src/pages/Preview.tsx",
+        "line_start": 5,
+        "anchor": "Preview"
+      },
+      "exploitability": {
+        "requires_auth": false,
+        "requires_interaction": true,
+        "network_exposed": true,
+        "assessment": "A user-controlled preview payload can become stored or reflected XSS."
+      },
+      "remediation": {
+        "summary": "Sanitize html with a proven sanitizer such as DOMPurify before rendering, or render a safe structured format instead of raw HTML."
+      }
+    }
+  ]
+}

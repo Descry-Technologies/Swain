@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "partial": false,
+  "findings": [
+    {
+      "rule": "sast.tenant-isolation",
+      "severity": "critical",
+      "confidence": 0.95,
+      "title": "Tenant settings route trusts tenant_id from the path",
+      "description": "get_tenant_settings accepts tenant_id from the URL and queries tenant settings with it. The current_user dependency is present, but the route never checks that user.tenant_id matches the requested tenant or that the user is a member.",
+      "evidence": {
+        "file": "backend/app/api/v1/tenants.py",
+        "line_start": 15,
+        "anchor": "get_tenant_settings"
+      },
+      "exploitability": {
+        "requires_auth": true,
+        "requires_interaction": false,
+        "network_exposed": true,
+        "assessment": "Any authenticated user can read another tenant's settings by changing the path."
+      },
+      "remediation": {
+        "summary": "Derive tenant_id from the authenticated principal or require an explicit membership check before returning tenant settings."
+      }
+    }
+  ]
+}

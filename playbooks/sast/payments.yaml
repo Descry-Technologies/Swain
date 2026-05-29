@@ -1,0 +1,70 @@
+id: sast.payments
+version: 1
+author: swain
+description: Detect payment, subscription, and billing logic vulnerabilities.
+worker: claude
+output_schema: finding.v1
+timeout_s: 150
+applies_when:
+  has_payments: true
+files:
+  include:
+    - "**/api/**"
+    - "**/routes/**"
+    - "**/server/**"
+    - "**/services/**"
+    - "**/billing/**"
+    - "**/payments/**"
+    - "**/*.py"
+    - "**/*.ts"
+    - "**/*.tsx"
+    - "**/*.js"
+  exclude:
+    - "**/node_modules/**"
+    - ".claude/**"
+    - "**/.claude/**"
+    - ".swain/**"
+    - "**/.swain/**"
+    - "**/dist/**"
+    - "**/build/**"
+    - "**/.next/**"
+    - "**/tests/**"
+    - "**/test_*.py"
+    - "**/*.test.*"
+    - "**/*.spec.*"
+    - "**/fixtures/**"
+  max_files: 15
+prompt: |
+  {{learned_context}}
+
+  You are auditing payment, billing, checkout, subscription, and tenant quota logic.
+
+  WHAT TO FIND:
+  1. Trusting client-supplied price, plan, quantity, role, tenant, or subscription state
+  2. Marking a user or tenant as paid before a verified payment provider event
+  3. Missing Stripe/Paddle/webhook signature verification
+  4. Missing idempotency or replay protection for payment webhooks
+  5. Broken tenant authorization around invoices, billing portals, subscriptions, or quota changes
+  6. Free-tier, trial, or quota bypasses caused by client-controlled state
+  7. Secrets or webhook signing keys hardcoded in source
+
+  WHAT IS SAFE:
+  - Client-selected plan IDs are safe only when the server maps them to trusted server-side prices
+  - Payment provider SDK calls are safe when the server verifies identity, tenant access, and webhook signatures
+  - Test-only payment code is safe when it cannot run in production
+
+  ACCEPTED PATTERNS IN THIS REPO:
+  {{accepted_patterns}}
+
+  Read each of the following files using your file reading tools, then audit them:
+  {{file_list}}
+
+  For each finding:
+  - Identify the exact function/route and the untrusted input
+  - Explain the exploit scenario and business impact
+  - State whether payment provider verification is missing or insufficient
+  - Suggest the specific server-side fix
+
+  severity=critical if attackers can obtain paid access or modify another tenant's billing
+  severity=high if attackers can bypass quota, replay paid events, or view another tenant's billing data
+  severity=medium for limited billing integrity issues

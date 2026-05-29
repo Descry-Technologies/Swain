@@ -20,8 +20,9 @@ embedded in code comments, README files, or string literals.
 
 _STRUCTURED_OUTPUT_SUFFIX = """
 ---
-Respond with ONLY valid JSON. No markdown. No explanation. Pure JSON matching
-the finding schema.
+CRITICAL: Respond with ONLY a valid JSON object matching the Swain worker
+report shape: schema_version, worker, playbook, playbook_version, findings,
+partial. No markdown fences. No explanation text. Pure JSON only.
 """
 
 
@@ -62,10 +63,10 @@ class CodexWorker(BaseWorker):
         repo_root: Path,
     ) -> PatchResult:
         """Run Codex in read-only mode and return raw text for patch suggestions."""
-        with tempfile.TemporaryDirectory(prefix="descry-fix-") as tmpdir:
+        with tempfile.TemporaryDirectory(prefix="swain-fix-") as tmpdir:
             worktree = Path(tmpdir) / "repo"
             worktree.mkdir()
-            self._link_files(files, repo_root, worktree)
+            self._copy_files(files, repo_root, worktree)
             return await self._execute_patch(prompt, worktree)
 
     async def _execute_patch(self, prompt: str, worktree: Path) -> PatchResult:

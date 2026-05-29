@@ -1,0 +1,113 @@
+<svg class="rich-terminal" viewBox="0 0 1336 391.59999999999997" xmlns="http://www.w3.org/2000/svg">
+    <!-- Generated with Rich https://www.textualize.io -->
+    <style>
+
+    @font-face {
+        font-family: "Fira Code";
+        src: local("FiraCode-Regular"),
+                url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff2/FiraCode-Regular.woff2") format("woff2"),
+                url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff/FiraCode-Regular.woff") format("woff");
+        font-style: normal;
+        font-weight: 400;
+    }
+    @font-face {
+        font-family: "Fira Code";
+        src: local("FiraCode-Bold"),
+                url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff2/FiraCode-Bold.woff2") format("woff2"),
+                url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff/FiraCode-Bold.woff") format("woff");
+        font-style: bold;
+        font-weight: 700;
+    }
+
+    .terminal-3232126312-matrix {
+        font-family: Fira Code, monospace;
+        font-size: 20px;
+        line-height: 24.4px;
+        font-variant-east-asian: full-width;
+    }
+
+    .terminal-3232126312-title {
+        font-size: 18px;
+        font-weight: bold;
+        font-family: arial;
+    }
+
+    .terminal-3232126312-r1 { fill: #00d4aa;font-weight: bold }
+.terminal-3232126312-r2 { fill: #c5c8c6 }
+.terminal-3232126312-r3 { fill: #98a84b;font-weight: bold }
+.terminal-3232126312-r4 { fill: #c5c8c6;font-weight: bold }
+    </style>
+
+    <defs>
+    <clipPath id="terminal-3232126312-clip-terminal">
+      <rect x="0" y="0" width="1316.6" height="340.59999999999997" />
+    </clipPath>
+    <clipPath id="terminal-3232126312-line-0">
+    <rect x="0" y="1.5" width="1317.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3232126312-line-1">
+    <rect x="0" y="25.9" width="1317.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3232126312-line-2">
+    <rect x="0" y="50.3" width="1317.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3232126312-line-3">
+    <rect x="0" y="74.7" width="1317.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3232126312-line-4">
+    <rect x="0" y="99.1" width="1317.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3232126312-line-5">
+    <rect x="0" y="123.5" width="1317.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3232126312-line-6">
+    <rect x="0" y="147.9" width="1317.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3232126312-line-7">
+    <rect x="0" y="172.3" width="1317.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3232126312-line-8">
+    <rect x="0" y="196.7" width="1317.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3232126312-line-9">
+    <rect x="0" y="221.1" width="1317.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3232126312-line-10">
+    <rect x="0" y="245.5" width="1317.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3232126312-line-11">
+    <rect x="0" y="269.9" width="1317.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3232126312-line-12">
+    <rect x="0" y="294.3" width="1317.6" height="24.65"/>
+            </clipPath>
+    </defs>
+
+    <rect fill="#292929" stroke="rgba(255,255,255,0.35)" stroke-width="1" x="1" y="1" width="1334" height="389.6" rx="8"/><text class="terminal-3232126312-title" fill="#c5c8c6" text-anchor="middle" x="667" y="27">Swain&#160;-&#160;TUI&#160;first&#160;run</text>
+            <g transform="translate(26,22)">
+            <circle cx="0" cy="0" r="7" fill="#ff5f57"/>
+            <circle cx="22" cy="0" r="7" fill="#febc2e"/>
+            <circle cx="44" cy="0" r="7" fill="#28c840"/>
+            </g>
+        
+    <g transform="translate(9, 41)" clip-path="url(#terminal-3232126312-clip-terminal)">
+    
+    <g class="terminal-3232126312-matrix">
+    <text class="terminal-3232126312-r1" x="0" y="20" textLength="207.4" clip-path="url(#terminal-3232126312-line-0)">Swain&#160;/&#160;Swain&#160;TUI</text><text class="terminal-3232126312-r2" x="1317.6" y="20" textLength="12.2" clip-path="url(#terminal-3232126312-line-0)">
+</text><text class="terminal-3232126312-r2" x="1317.6" y="44.4" textLength="12.2" clip-path="url(#terminal-3232126312-line-1)">
+</text><text class="terminal-3232126312-r3" x="0" y="68.8" textLength="24.4" clip-path="url(#terminal-3232126312-line-2)">╭─</text><text class="terminal-3232126312-r3" x="24.4" y="68.8" textLength="85.4" clip-path="url(#terminal-3232126312-line-2)">&#160;Swain&#160;</text><text class="terminal-3232126312-r3" x="109.8" y="68.8" textLength="1183.4" clip-path="url(#terminal-3232126312-line-2)">─────────────────────────────────────────────────────────────────────────────────────────────────</text><text class="terminal-3232126312-r3" x="1293.2" y="68.8" textLength="24.4" clip-path="url(#terminal-3232126312-line-2)">─╮</text><text class="terminal-3232126312-r2" x="1317.6" y="68.8" textLength="12.2" clip-path="url(#terminal-3232126312-line-2)">
+</text><text class="terminal-3232126312-r3" x="0" y="93.2" textLength="12.2" clip-path="url(#terminal-3232126312-line-3)">│</text><text class="terminal-3232126312-r2" x="24.4" y="93.2" textLength="1134.6" clip-path="url(#terminal-3232126312-line-3)">I&#x27;m&#160;looking&#160;at&#160;your&#160;react,&#160;fastapi,&#160;stripe&#160;project.&#160;I&#160;see&#160;auth,&#160;payments,&#160;uploads&#160;in&#160;the&#160;mix.</text><text class="terminal-3232126312-r3" x="1305.4" y="93.2" textLength="12.2" clip-path="url(#terminal-3232126312-line-3)">│</text><text class="terminal-3232126312-r2" x="1317.6" y="93.2" textLength="12.2" clip-path="url(#terminal-3232126312-line-3)">
+</text><text class="terminal-3232126312-r3" x="0" y="117.6" textLength="12.2" clip-path="url(#terminal-3232126312-line-4)">│</text><text class="terminal-3232126312-r3" x="1305.4" y="117.6" textLength="12.2" clip-path="url(#terminal-3232126312-line-4)">│</text><text class="terminal-3232126312-r2" x="1317.6" y="117.6" textLength="12.2" clip-path="url(#terminal-3232126312-line-4)">
+</text><text class="terminal-3232126312-r3" x="0" y="142" textLength="12.2" clip-path="url(#terminal-3232126312-line-5)">│</text><text class="terminal-3232126312-r2" x="24.4" y="142" textLength="1000.4" clip-path="url(#terminal-3232126312-line-5)">Hey.&#160;First&#160;time&#160;with&#160;this&#160;repo.&#160;Run&#160;/scan&#160;and&#160;I&#x27;ll&#160;check&#160;the&#160;risky&#160;surfaces&#160;first.</text><text class="terminal-3232126312-r3" x="1305.4" y="142" textLength="12.2" clip-path="url(#terminal-3232126312-line-5)">│</text><text class="terminal-3232126312-r2" x="1317.6" y="142" textLength="12.2" clip-path="url(#terminal-3232126312-line-5)">
+</text><text class="terminal-3232126312-r3" x="0" y="166.4" textLength="1317.6" clip-path="url(#terminal-3232126312-line-6)">╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯</text><text class="terminal-3232126312-r2" x="1317.6" y="166.4" textLength="12.2" clip-path="url(#terminal-3232126312-line-6)">
+</text><text class="terminal-3232126312-r4" x="0" y="190.8" textLength="24.4" clip-path="url(#terminal-3232126312-line-7)">╭─</text><text class="terminal-3232126312-r4" x="24.4" y="190.8" textLength="61" clip-path="url(#terminal-3232126312-line-7)">&#160;you&#160;</text><text class="terminal-3232126312-r4" x="85.4" y="190.8" textLength="1207.8" clip-path="url(#terminal-3232126312-line-7)">───────────────────────────────────────────────────────────────────────────────────────────────────</text><text class="terminal-3232126312-r4" x="1293.2" y="190.8" textLength="24.4" clip-path="url(#terminal-3232126312-line-7)">─╮</text><text class="terminal-3232126312-r2" x="1317.6" y="190.8" textLength="12.2" clip-path="url(#terminal-3232126312-line-7)">
+</text><text class="terminal-3232126312-r4" x="0" y="215.2" textLength="12.2" clip-path="url(#terminal-3232126312-line-8)">│</text><text class="terminal-3232126312-r2" x="24.4" y="215.2" textLength="256.2" clip-path="url(#terminal-3232126312-line-8)">are&#160;we&#160;ready&#160;to&#160;ship?</text><text class="terminal-3232126312-r4" x="1305.4" y="215.2" textLength="12.2" clip-path="url(#terminal-3232126312-line-8)">│</text><text class="terminal-3232126312-r2" x="1317.6" y="215.2" textLength="12.2" clip-path="url(#terminal-3232126312-line-8)">
+</text><text class="terminal-3232126312-r4" x="0" y="239.6" textLength="1317.6" clip-path="url(#terminal-3232126312-line-9)">╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯</text><text class="terminal-3232126312-r2" x="1317.6" y="239.6" textLength="12.2" clip-path="url(#terminal-3232126312-line-9)">
+</text><text class="terminal-3232126312-r3" x="0" y="264" textLength="24.4" clip-path="url(#terminal-3232126312-line-10)">╭─</text><text class="terminal-3232126312-r3" x="24.4" y="264" textLength="85.4" clip-path="url(#terminal-3232126312-line-10)">&#160;Swain&#160;</text><text class="terminal-3232126312-r3" x="109.8" y="264" textLength="1183.4" clip-path="url(#terminal-3232126312-line-10)">─────────────────────────────────────────────────────────────────────────────────────────────────</text><text class="terminal-3232126312-r3" x="1293.2" y="264" textLength="24.4" clip-path="url(#terminal-3232126312-line-10)">─╮</text><text class="terminal-3232126312-r2" x="1317.6" y="264" textLength="12.2" clip-path="url(#terminal-3232126312-line-10)">
+</text><text class="terminal-3232126312-r3" x="0" y="288.4" textLength="12.2" clip-path="url(#terminal-3232126312-line-11)">│</text><text class="terminal-3232126312-r2" x="24.4" y="288.4" textLength="1244.4" clip-path="url(#terminal-3232126312-line-11)">Before&#160;shipping,&#160;I&#160;want&#160;a&#160;clean&#160;pass&#160;on&#160;auth,&#160;payments,&#160;uploads,&#160;secrets,&#160;and&#160;tenant/data&#160;access.&#160;Run&#160;</text><text class="terminal-3232126312-r3" x="1305.4" y="288.4" textLength="12.2" clip-path="url(#terminal-3232126312-line-11)">│</text><text class="terminal-3232126312-r2" x="1317.6" y="288.4" textLength="12.2" clip-path="url(#terminal-3232126312-line-11)">
+</text><text class="terminal-3232126312-r3" x="0" y="312.8" textLength="12.2" clip-path="url(#terminal-3232126312-line-12)">│</text><text class="terminal-3232126312-r2" x="24.4" y="312.8" textLength="854" clip-path="url(#terminal-3232126312-line-12)">/scan,&#160;then&#160;fix&#160;anything&#160;critical&#160;or&#160;high&#160;before&#160;you&#160;trust&#160;the&#160;launch.</text><text class="terminal-3232126312-r3" x="1305.4" y="312.8" textLength="12.2" clip-path="url(#terminal-3232126312-line-12)">│</text><text class="terminal-3232126312-r2" x="1317.6" y="312.8" textLength="12.2" clip-path="url(#terminal-3232126312-line-12)">
+</text><text class="terminal-3232126312-r3" x="0" y="337.2" textLength="1317.6" clip-path="url(#terminal-3232126312-line-13)">╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯</text><text class="terminal-3232126312-r2" x="1317.6" y="337.2" textLength="12.2" clip-path="url(#terminal-3232126312-line-13)">
+</text>
+    </g>
+    </g>
+</svg>

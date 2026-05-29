@@ -1,0 +1,75 @@
+id: sast.tenant-isolation
+version: 1
+author: swain
+description: Detect cross-tenant data access and tenant boundary failures.
+worker: claude
+output_schema: finding.v1
+timeout_s: 150
+applies_when:
+  has_auth: true
+files:
+  include:
+    - "**/api/**"
+    - "**/routes/**"
+    - "**/server/**"
+    - "**/services/**"
+    - "**/db/**"
+    - "**/*.py"
+    - "**/*.ts"
+    - "**/*.tsx"
+    - "**/*.js"
+  exclude:
+    - "**/node_modules/**"
+    - ".claude/**"
+    - "**/.claude/**"
+    - ".swain/**"
+    - "**/.swain/**"
+    - "**/dist/**"
+    - "**/build/**"
+    - "**/.next/**"
+    - "**/tests/**"
+    - "**/test_*.py"
+    - "**/*.test.*"
+    - "**/*.spec.*"
+    - "**/fixtures/**"
+    - "**/alembic/**"
+    - "**/migrations/**"
+  max_files: 12
+prompt: |
+  {{learned_context}}
+
+  You are auditing tenant isolation and organization/workspace authorization.
+
+  WHAT TO FIND:
+  1. Queries for tenant, workspace, organization, account, invoice, user, SIM,
+     project, or file records that do not constrain by the caller's tenant_id
+  2. Routes that accept tenant_id, org_id, workspace_id, account_id, or user_id
+     from the request and trust it without checking membership/ownership
+  3. Admin or owner-only actions that only check authentication, not role within
+     the target tenant
+  4. Payment, upload, export, dashboard, analytics, or settings endpoints that
+     can read or modify another tenant's data
+  5. Background jobs or webhooks that update tenant records based on client-
+     supplied IDs without verifying a provider/customer mapping
+
+  WHAT IS SAFE:
+  - Query helpers that always inject tenant_id from the authenticated principal
+  - Explicit membership checks like require_tenant_member(user, tenant_id)
+  - Provider IDs mapped server-side to tenant records before writes
+  - Super-admin paths that check a real privileged role and are not user-settable
+
+  ACCEPTED PATTERNS IN THIS REPO:
+  {{accepted_patterns}}
+
+  Read each of the following files using your file reading tools, then audit them:
+  {{file_list}}
+
+  For each finding:
+  - Identify the route/function and the missing tenant boundary
+  - Trace the untrusted ID from request, token, webhook, or job payload
+  - State which data or action crosses tenants
+  - Suggest the exact authorization or query constraint to add
+
+  severity=critical if attackers can read or modify another tenant's sensitive data
+  severity=high if attackers can change another tenant's settings, billing, quota, or files
+  severity=medium for lower-impact cross-tenant metadata exposure

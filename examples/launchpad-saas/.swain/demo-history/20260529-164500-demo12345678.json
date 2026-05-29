@@ -1,0 +1,12 @@
+{
+  "run_id": "demo12345678",
+  "timestamp": "2026-05-29T16:45:00+00:00",
+  "finding_count": 5,
+  "severities": {
+    "critical": 1,
+    "high": 4,
+    "medium": 0,
+    "low": 0,
+    "info": 0
+  }
+}

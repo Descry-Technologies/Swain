@@ -59,13 +59,30 @@ class SecretsScanner:
     def _entropy_scan(self, repo_root: Path) -> list[SecretHit]:
         """Fallback: regex + Shannon entropy scan."""
         patterns = [
-            (r'(?i)(api[_-]?key|secret|token|password)\s*[=:]\s*["\']([^"\']{16,})["\']', "generic-secret"),
+            (
+                r"(?i)(api[_-]?key|secret|token|password)\s*[=:]\s*"
+                r"""["']([^"']{16,})["']""",
+                "generic-secret",
+            ),
             (r'sk-[a-zA-Z0-9]{48}', "openai-key"),
-            (r'anthropic[_-]?api[_-]?key\s*=\s*["\']?(sk-ant-[^"\'\s]+)', "anthropic-key"),
+            (
+                r"""anthropic[_-]?api[_-]?key\s*=\s*["']?"""
+                r"""(sk-ant-[^"'\s]+)""",
+                "anthropic-key",
+            ),
             (r'AKIA[0-9A-Z]{16}', "aws-access-key"),
         ]
         hits = []
-        ignore = {".git", "node_modules", "__pycache__", ".next", "dist", "build", "target", ".venv"}
+        ignore = {
+            ".git",
+            "node_modules",
+            "__pycache__",
+            ".next",
+            "dist",
+            "build",
+            "target",
+            ".venv",
+        }
         for f in repo_root.rglob("*"):
             if not f.is_file() or any(p in f.parts for p in ignore):
                 continue
@@ -74,14 +91,16 @@ class SecretsScanner:
                 for pattern, rule_id in patterns:
                     for m in re.finditer(pattern, text):
                         line = text[: m.start()].count("\n") + 1
-                        hits.append(SecretHit(
-                            file=str(f.relative_to(repo_root)),
-                            line=line,
-                            rule=rule_id,
-                            match_hash=_hash_secret(m.group(0)),
-                        ))
-            except Exception:
-                pass
+                        hits.append(
+                            SecretHit(
+                                file=str(f.relative_to(repo_root)),
+                                line=line,
+                                rule=rule_id,
+                                match_hash=_hash_secret(m.group(0)),
+                            )
+                        )
+            except (OSError, UnicodeError):
+                continue
         return hits
 
 

@@ -8,6 +8,8 @@ from typing import Any
 import yaml
 from jsonschema import ValidationError, validate
 
+from descry.resources import schema_path
+
 
 class PlaybookLoader:
     def __init__(self, builtin_dir: Path, user_dir: Path | None = None) -> None:
@@ -17,10 +19,11 @@ class PlaybookLoader:
 
     def _load_schema(self) -> dict:
         if self._schema is None:
-            schema_path = Path(__file__).parent.parent.parent.parent / "schemas" / "playbook.v1.json"
-            if schema_path.exists():
+            path = schema_path("playbook.v1.json")
+            if path.exists():
                 import json
-                self._schema = json.loads(schema_path.read_text())
+
+                self._schema = json.loads(path.read_text())
             else:
                 self._schema = {}
         return self._schema
@@ -44,7 +47,7 @@ class PlaybookLoader:
                         self._validate(pb, f)
                         playbooks.append(pb)
                 except Exception as e:
-                    print(f"[descry] Warning: could not load playbook {f.name}: {e}")
+                    print(f"[swain] Warning: could not load playbook {f.name}: {e}")
         # Deduplicate: user playbooks win over built-ins
         seen: dict[str, dict] = {}
         for pb in playbooks:
@@ -75,6 +78,8 @@ class PlaybookLoader:
             if cond.get("has_auth") and not inventory.has_auth:
                 continue
             if cond.get("has_payments") and not inventory.has_payments:
+                continue
+            if cond.get("has_file_upload") and not inventory.has_file_upload:
                 continue
             result.append(pb)
         return result

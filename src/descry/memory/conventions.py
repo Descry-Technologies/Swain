@@ -5,13 +5,13 @@ Promotion algorithm:
 - Same rule fires on similar code N≥3 times
 - Marked FP at least 2 of those times (different events or 7-day spread)
 - 7-day cooling period since first observation
-- High-severity rules (critical/high) CANNOT be auto-promoted — require explicit config.yaml entry
+- High-severity rules (critical/high) CANNOT be auto-promoted
 - Each convention stores full provenance so it can be revoked
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from descry.memory.store import MemoryStore
@@ -39,7 +39,13 @@ class ConventionStore:
         with self._store.lock():
             self._store.write_yaml(self._store.conventions_path, self._data)
 
-    def record_fp(self, finding_id: str, rule: str, file_glob: str, severity: str) -> None:
+    def record_fp(
+        self,
+        finding_id: str,
+        rule: str,
+        file_glob: str,
+        severity: str,
+    ) -> None:
         """Record an FP event and attempt to promote to convention."""
         candidates = self._data["candidates"]
         key = f"{rule}:{file_glob}"
@@ -50,11 +56,14 @@ class ConventionStore:
                 "severity": severity,
                 "occurrences": 0,
                 "fp_events": [],
-                "first_seen": datetime.utcnow().isoformat(),
+                "first_seen": datetime.now(UTC).isoformat(),
             }
         c = candidates[key]
         c["occurrences"] += 1
-        c["fp_events"].append({"finding_id": finding_id, "ts": datetime.utcnow().isoformat()})
+        c["fp_events"].append({
+            "finding_id": finding_id,
+            "ts": datetime.now(UTC).isoformat(),
+        })
         self._maybe_promote(key, c)
         self._save()
 
@@ -71,7 +80,9 @@ class ConventionStore:
             return
 
         first_seen = datetime.fromisoformat(candidate["first_seen"])
-        if datetime.utcnow() - first_seen < timedelta(days=PROMOTION_COOLING_DAYS):
+        if first_seen.tzinfo is None:
+            first_seen = first_seen.replace(tzinfo=UTC)
+        if datetime.now(UTC) - first_seen < timedelta(days=PROMOTION_COOLING_DAYS):
             return
 
         # Promote
@@ -80,7 +91,7 @@ class ConventionStore:
             "rule": candidate["rule"],
             "file_glob": candidate["file_glob"],
             "severity": severity,
-            "promoted_at": datetime.utcnow().isoformat(),
+            "promoted_at": datetime.now(UTC).isoformat(),
             "provenance": {"fp_events": fps, "occurrences": occurrences},
             "active": True,
         }

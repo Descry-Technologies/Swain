@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "partial": false,
+  "findings": [
+    {
+      "rule": "sast.payments",
+      "severity": "critical",
+      "confidence": 0.94,
+      "title": "Checkout trusts client-supplied price and tenant metadata",
+      "description": "The checkout route sends body.price_id and body.tenant_id directly to Stripe. A user can choose a cheaper price or another tenant's ID instead of the server mapping an allowed plan for the authenticated tenant.",
+      "evidence": {
+        "file": "backend/app/api/v1/billing.py",
+        "line_start": 15,
+        "anchor": "start_checkout"
+      },
+      "exploitability": {
+        "requires_auth": true,
+        "requires_interaction": false,
+        "network_exposed": true,
+        "assessment": "A logged-in user can tamper with billing state and paid access."
+      },
+      "remediation": {
+        "summary": "Map plan IDs to server-owned Stripe price IDs, derive tenant_id from the authenticated user, and reject client-supplied billing ownership metadata."
+      }
+    },
+    {
+      "rule": "sast.payments",
+      "severity": "high",
+      "confidence": 0.92,
+      "title": "Webhook does not verify Stripe signature",
+      "description": "The webhook parses request JSON directly and trusts event metadata before upgrading tenant plan state. There is no stripe.Webhook.construct_event call or signature secret verification.",
+      "evidence": {
+        "file": "backend/app/api/v1/billing.py",
+        "line_start": 27,
+        "anchor": "stripe_webhook"
+      },
+      "exploitability": {
+        "requires_auth": false,
+        "requires_interaction": false,
+        "network_exposed": true,
+        "assessment": "Anyone who can reach the webhook can forge a checkout.session.completed event."
+      },
+      "remediation": {
+        "summary": "Verify the Stripe-Signature header with the webhook signing secret, enforce idempotency, and map provider customer/session IDs to tenants server-side."
+      }
+    }
+  ]
+}

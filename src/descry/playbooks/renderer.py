@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-from pathlib import Path
 from typing import Any
 
 
@@ -22,7 +20,9 @@ def render_prompt(
     template = playbook.get("prompt", "")
     subs: dict[str, str] = {
         "learned_context": learned_context,
-        "accepted_patterns": "\n".join(f"  - {p}" for p in accepted_patterns) or "  (none)",
+        "accepted_patterns": (
+            "\n".join(f"  - {p}" for p in accepted_patterns) or "  (none)"
+        ),
         "file_list": "\n".join(f"  {f}" for f in file_list[:50]),
         "playbook_id": playbook.get("id", ""),
         "playbook_version": str(playbook.get("version", 1)),
@@ -34,7 +34,12 @@ def render_prompt(
     for key, value in subs.items():
         # Quote substituted values to prevent template injection
         result = result.replace("{{" + key + "}}", _quote_data(value, key))
-    return result
+
+    metadata = (
+        f"PLAYBOOK_ID: {playbook.get('id', '')}\n"
+        f"PLAYBOOK_VERSION: {playbook.get('version', 1)}"
+    )
+    return f"{metadata}\n\n{result}"
 
 
 def _quote_data(value: str, key: str) -> str:
