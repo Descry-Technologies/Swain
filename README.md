@@ -1,16 +1,16 @@
-# Swain
+# swain.
 
-**Your local AI security lead for vibe coders shipping SaaS fast.**
+**open-source local security review. one command before you ship.**
 
-Swain is for solo builders and small teams who have a real app that is almost
-ready to ship, but still need a plain-English launch verdict: can this ship,
-what blocks release, and what should be fixed first?
+> *the machines write the code now. swain is what watches them.*
 
-![Swain launch card showing a blocked launch verdict](docs/assets/demo/launch-card.svg)
+![swain launch card](docs/assets/demo/launch-card.svg)
 
-## Quickstart
+swain is for solo builders and small teams who have a real app almost ready to ship, but still need a plain-english launch verdict: can this ship, what blocks release, and what should be fixed first?
 
-Install once, then run `swain` from any terminal:
+## quickstart
+
+install once, then run `swain` from any terminal:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Descry-Technologies/Swain/main/install.sh | sh
@@ -18,143 +18,89 @@ cd /path/to/your/repo
 swain
 ```
 
-The installer clones Swain's source into `~/.swain/source`, installs the
-`swain` command, and keeps `uv` hidden as an implementation detail. The first
-`swain` launch explains what Swain reads and writes, then asks whether scans
-should use Claude CLI, Codex CLI, or hybrid mode. It also lets you choose CLI
-default models or exact model ids, and a scan speed so quota use is explicit.
-Setup builds a local project profile without spending model quota.
+the installer clones swain's source into `~/.swain/source`, installs the `swain` command, and keeps `uv` hidden as an implementation detail. first launch explains what swain reads and writes, then asks whether scans should use claude cli, codex cli, or hybrid mode. setup builds a local project profile without spending model quota.
 
-Update the source-installed command without PyPI:
+update without pypi:
 
 ```bash
 swain update
 ```
 
-From outside the repo:
+from outside the repo:
 
 ```bash
 swain /path/to/your/repo
 ```
 
-For the offline demo:
+offline demo (no quota):
 
 ```bash
 swain demo
 ```
 
-`swain demo` does not spend Claude/Codex quota.
-
-After a scan, export a shareable launch verdict:
+export a shareable launch verdict:
 
 ```bash
 swain launch-card --out swain-launch-card.svg
 ```
 
-The card is a 1200x630 SVG built from local scan history. It is designed for
-public updates and project handoffs without exposing raw worker logs or source
-code.
+## what it catches
 
-`doctor` checks repo setup, bundled playbooks, local package hygiene, and your
-Claude/Codex CLIs. If a worker is missing, out of quota, or unauthenticated,
-Swain reports that as expected degradation instead of hiding it as a scan
-failure.
+launch-risk surfaces a fast-moving saas is most likely to get hurt on:
 
-See [docs/source-install.md](docs/source-install.md) for prerequisites and
-common setup failures. Contributors can still use the checkout workflow there.
+- **auth** — sessions, tokens, privilege escalation
+- **billing** — payment trust, webhook verification
+- **uploads** — path handling, tenant boundaries
+- **secrets** — hardcoded values, env handling
+- **sql** — injection, parameterisation
+- **xss** — innerHTML, unsafe rendering
+- **tenant** — object-level auth, isolation
 
-## What It Catches
+not a replacement for semgrep, snyk, or a professional audit. a human, fix-first review for the places that matter most before launch.
 
-Swain focuses on security issues that block a SaaS launch:
+## fix first
 
-- auth and session mistakes
-- billing trust boundaries and webhook verification
-- unsafe uploads and path handling
-- tenant isolation and object-level authorization
-- hardcoded secrets and risky env handling
-- SQL/data-access injection paths
-- React XSS and unsafe HTML rendering
-
-It is not trying to replace Semgrep, Snyk, or a professional security audit.
-It gives a human, fix-first review for the places a fast-moving app is most
-likely to get hurt.
-
-## Fix First
-
-`swain status` summarizes the latest scan history and chooses the first issue
-to fix. In the public demo, the top finding is a launch-risk billing bug:
+`swain status` summarizes the latest scan history and surfaces the first issue to fix:
 
 ```text
-Fix first: `bee77255` - Checkout trusts client-supplied price and tenant metadata
-  Next: swain fix bee77255 --path examples/launchpad-saas
-  Wrong? swain feedback bee77255 fp --path examples/launchpad-saas
+fix first: `bee77255` — checkout trusts client-supplied price and tenant metadata
+  next: swain fix bee77255 --path examples/launchpad-saas
+  wrong? swain feedback bee77255 fp --path examples/launchpad-saas
 ```
 
-`swain fix <id>` asks Codex for a reviewable patch draft. It does not silently
-apply code changes. `swain feedback <id> fp` teaches Swain when a finding is a
-false positive for this repo.
+`swain fix <id>` asks codex for a reviewable patch draft. it does not silently apply code changes. `swain feedback <id> fp` teaches swain when a finding is a false positive.
 
-## Launch Card
+## launch card
 
-`swain launch-card` turns the latest scan history into a concise ship/no-ship
-card:
+`swain launch-card` turns the latest scan history into a ship/no-ship card:
 
-- launch verdict: `BLOCKED`, `REVIEW`, `READY`, or `NO SCAN YET`
+- verdict: `blocked` · `review` · `ready` · `no scan yet`
 - open finding count and launch-blocker count
 - top issue and exact next command
-- reminder that patch drafts are review-only
 
-This is the intended social artifact for build-in-public updates: show the
-launch decision, not a wall of terminal output.
+designed for build-in-public updates: shows the decision, not a wall of output.
 
-## Demo
+## demo
 
-Use [examples/launchpad-saas](examples/launchpad-saas) for public screenshots,
-recordings, and offline evaluation. It is an intentionally vulnerable React +
-FastAPI SaaS app with auth, billing, uploads, tenant data, SQL, secrets, and XSS
-risks.
-
-Demo assets:
+use [examples/launchpad-saas](examples/launchpad-saas) — an intentionally vulnerable react + fastapi saas app:
 
 - [launch-card.svg](docs/assets/demo/launch-card.svg)
 - [scan-flow.gif](docs/assets/demo/scan-flow.gif)
-- [status.svg](docs/assets/demo/status.svg)
-- [doctor.svg](docs/assets/demo/doctor.svg)
-- [finding-narrative.svg](docs/assets/demo/finding-narrative.svg)
-- [tui-first-run.svg](docs/assets/demo/tui-first-run.svg)
 - [transcript.md](docs/assets/demo/transcript.md)
 
-Regenerate them with:
+regenerate assets:
 
 ```bash
 uv run python scripts/capture_demo_assets.py
 ```
 
-ImageMagick's `convert` binary is only required for regenerating
-`scan-flow.gif`.
+## privacy and trust
 
-## Privacy And Trust
+runs locally. uses your installed `claude` and `codex` clis as model workers. stores project memory under `.swain/` in the target repo. the planner excludes `.env`, private keys, and pem files before selecting files for workers.
 
-Swain runs locally and uses your installed `claude` and `codex` CLIs as model
-workers by default. Advanced users can switch a worker to direct API mode in
-`swain setup`, using `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` and exact model ids.
-It stores project memory under `.swain/` in the target repo. Scans use
-isolated file copies for worker analysis, and the planner excludes local secret
-material such as `.env`, private keys, and PEM files before selecting files for
-model workers.
+read [docs/privacy-and-trust.md](docs/privacy-and-trust.md) before scanning sensitive code. short version: local-first, but claude/codex clis are still third-party tools.
 
-Read [docs/privacy-and-trust.md](docs/privacy-and-trust.md) before scanning
-sensitive code. The short version: Swain is local-first, but Claude/Codex CLIs
-are still third-party tools, so do not scan highly sensitive private code unless
-you trust those local CLI integrations.
-
-## How It Works
-
-Swain builds a local project profile, runs deterministic checks first, routes
-focused playbooks to Claude/Codex workers, records finding history, and then
-answers the practical question: what should you fix before launch?
-
-Memory layout:
+## memory layout
 
 ```text
 .swain/
@@ -162,22 +108,17 @@ Memory layout:
   profile.yaml
   conventions.yaml
   playbooks/
-    active/
-    generated/
   demo-history/
   .local/
     history/
     calibration.yaml
-    schedule.yaml
 ```
 
-`config.yaml`, `profile.yaml`, `conventions.yaml`, reviewed custom playbooks,
-and the public demo's `demo-history/` fixture can be committed. `.swain/.local/`
-is local-only and ignored.
+`config.yaml`, `profile.yaml`, `conventions.yaml`, reviewed playbooks, and `demo-history/` can be committed. `.swain/.local/` is local-only and ignored.
 
-## Contributing
+## contributing
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md), then run the release gates:
+start with [CONTRIBUTING.md](CONTRIBUTING.md), then:
 
 ```bash
 uv run ruff check scripts src tests examples
@@ -185,8 +126,8 @@ uv run pytest -q
 uv build --wheel
 ```
 
-Security reports go through [SECURITY.md](SECURITY.md).
+security reports go through [SECURITY.md](SECURITY.md).
 
-## License
+## license
 
-Apache-2.0. See [LICENSE](LICENSE).
+apache-2.0 · [descry.app](https://www.descry.app)
