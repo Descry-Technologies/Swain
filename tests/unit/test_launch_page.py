@@ -20,9 +20,12 @@ def test_launch_page_has_product_hunt_ready_hero_and_ctas() -> None:
 
 def test_launch_page_has_social_metadata_and_trust_links() -> None:
     html = LANDING_PAGE.read_text()
+    social_image = (
+        "https://descry-technologies.github.io/Swain/assets/demo/launch-card.png"
+    )
 
     assert 'property="og:title"' in html
-    assert 'property="og:image" content="../assets/demo/launch-card.png"' in html
+    assert social_image in html
     assert 'name="twitter:card" content="summary_large_image"' in html
     assert "Privacy and trust" in html
     assert "https://github.com/Descry-Technologies/Swain" in html
