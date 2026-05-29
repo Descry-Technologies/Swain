@@ -27,21 +27,8 @@ prepend_user_bins() {
 }
 
 default_bin_dir() {
-  old_ifs=$IFS
-  IFS=:
-  for dir in $PATH; do
-    IFS=$old_ifs
-    [ -n "$dir" ] || continue
-    case "$dir" in
-      *"/.venv" | *"/.venv/"*) continue ;;
-    esac
-    if [ -d "$dir" ] && [ -w "$dir" ]; then
-      printf '%s\n' "$dir"
-      return
-    fi
-    IFS=:
-  done
-  IFS=$old_ifs
+  # Keep the command in a stable user bin. Picking the first writable PATH entry
+  # can land in a temporary tool directory and disappear after the shell exits.
   printf '%s\n' "$HOME/.local/bin"
 }
 
@@ -91,6 +78,7 @@ UV_TOOL_BIN_DIR="$BIN_DIR" uv tool install --force "$SOURCE_DIR"
 
 if [ -x "$BIN_DIR/swain" ]; then
   say "Swain installed."
+  say "Installed command: $BIN_DIR/swain"
 else
   fail "swain was not installed into $BIN_DIR"
 fi

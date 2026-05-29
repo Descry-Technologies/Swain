@@ -81,10 +81,35 @@ def run_update(
         _print_failure(install)
         return False
 
+    command_path = target_bin / "swain"
+    if not command_path.exists():
+        console.print(
+            Panel.fit(
+                "[red]Swain updated, but the command shim was not created.[/red]\n\n"
+                f"Expected command: {command_path}\n\n"
+                "Run the installer again or choose an explicit bin dir:\n"
+                f"  SWAIN_BIN_DIR={target_bin} "
+                "curl -fsSL https://raw.githubusercontent.com/"
+                "Descry-Technologies/Swain/main/install.sh | sh",
+                title="Update Failed",
+            )
+        )
+        return False
+
+    path_hint = ""
+    if not _path_contains(target_bin):
+        path_hint = (
+            "\n\n[yellow]That directory is not on PATH in this shell.[/yellow]\n"
+            f"Run now: `{command_path}`\n"
+            f"Add later: `export PATH=\"{target_bin}:$PATH\"`"
+        )
+
     console.print(
         Panel.fit(
             "[bold green]Swain is up to date.[/bold green]\n\n"
-            "Run `swain version` to confirm the installed command.",
+            f"Installed command: {command_path}\n"
+            "Run `swain version` to confirm the installed command."
+            f"{path_hint}",
             title="Done",
         )
     )
@@ -98,16 +123,24 @@ def _default_source_dir() -> Path:
     return Path.home() / ".swain" / "source"
 
 
-def _default_bin_dir() -> Path | None:
+def _default_bin_dir() -> Path:
     configured = os.environ.get("SWAIN_BIN_DIR")
     if configured:
         return Path(configured).expanduser()
-    installed = shutil.which("swain")
-    if installed:
-        path = Path(installed).resolve()
-        if ".venv" not in path.parts:
-            return path.parent
     return Path.home() / ".local" / "bin"
+
+
+def _path_contains(path: Path) -> bool:
+    target = str(path.expanduser().resolve())
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if not entry:
+            continue
+        try:
+            if str(Path(entry).expanduser().resolve()) == target:
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def _run(
