@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 import tempfile
 from abc import ABC, abstractmethod
@@ -395,18 +396,14 @@ class BaseWorker(ABC):
         else:
             evidence = dict(evidence)
 
-        evidence["file"] = (
-            evidence.get("file")
-            or evidence.get("path")
-            or finding.get("file")
-            or finding.get("path")
-            or "unknown"
-        )
+        file_value, location_line = self._normalize_file_reference(evidence, finding)
+        evidence["file"] = file_value or "unknown"
         line = (
             evidence.get("line_start")
             or evidence.get("line")
             or finding.get("line_start")
             or finding.get("line")
+            or location_line
         )
         evidence["line_start"] = self._normalize_line(line)
         if evidence.get("line_end") is not None:
@@ -420,6 +417,53 @@ class BaseWorker(ABC):
             or evidence["file"]
         )
         return evidence
+
+    def _normalize_file_reference(
+        self,
+        evidence: dict,
+        finding: dict,
+    ) -> tuple[str | None, int | None]:
+        for container in (evidence, finding):
+            for key in (
+                "file",
+                "path",
+                "filename",
+                "file_path",
+                "filepath",
+                "source_file",
+            ):
+                path, line = self._parse_file_reference(container.get(key))
+                if path:
+                    return path, line
+        for container in (evidence, finding):
+            for key in ("location", "loc", "code_location", "source"):
+                path, line = self._parse_file_reference(container.get(key))
+                if path:
+                    return path, line
+        return None, None
+
+    def _parse_file_reference(self, value: object) -> tuple[str | None, int | None]:
+        if isinstance(value, dict):
+            path, line = self._normalize_file_reference(value, {})
+            if path:
+                return path, line
+        text = self._normalize_optional_string(value)
+        if not text or text.lower() in {"unknown", "n/a", "none", "null"}:
+            return None, None
+
+        line: int | None = None
+        match = re.search(r"^(.+?):(\d+)(?::\d+)?$", text)
+        if match:
+            text = match.group(1)
+            line = self._normalize_line(match.group(2))
+        else:
+            match = re.search(r"^(.+?)\s+line\s+(\d+)$", text, flags=re.I)
+            if match:
+                text = match.group(1)
+                line = self._normalize_line(match.group(2))
+
+        text = text.strip().strip("`")
+        return (text or None), line
 
     def _normalize_line(self, value: object) -> int | None:
         if value is None:

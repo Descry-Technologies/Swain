@@ -3,7 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from descry.commands.fix import generate_patch_suggestion, resolve_patch_target
+from descry.commands.fix import (
+    apply_patch_draft,
+    generate_patch_suggestion,
+    resolve_patch_target,
+)
 from descry.memory.store import MemoryStore
 
 
@@ -49,6 +53,46 @@ def test_fix_resolves_file_paths_that_include_line_suffix(tmp_path: Path) -> Non
     assert target.ok is True
     assert target.files == (source,)
     assert "backend/app.py" in target.message
+
+
+def test_fix_treats_unknown_file_as_unpatchable(tmp_path: Path) -> None:
+    _write_finding_history(
+        tmp_path,
+        finding_id="fadc886b12345678",
+        file="unknown",
+    )
+
+    target = resolve_patch_target(tmp_path, "fadc886b")
+
+    assert target.ok is False
+    assert "didn't name a real source file" in target.message
+    assert "I did not call Codex" in target.message
+
+
+def test_apply_patch_draft_applies_clean_patch(tmp_path: Path) -> None:
+    source = tmp_path / "app.py"
+    source.write_text("old = True\n")
+    patch = tmp_path / ".swain" / "fixes" / "fadc886b.patch"
+    patch.parent.mkdir(parents=True)
+    patch.write_text(
+        "\n".join(
+            [
+                "diff --git a/app.py b/app.py",
+                "index 3763032..bac0ee7 100644",
+                "--- a/app.py",
+                "+++ b/app.py",
+                "@@ -1 +1 @@",
+                "-old = True",
+                "+old = False",
+                "",
+            ]
+        )
+    )
+
+    result = apply_patch_draft(tmp_path, patch)
+
+    assert result.applied is True
+    assert source.read_text() == "old = False\n"
 
 
 def _write_finding_history(repo_root: Path, *, finding_id: str, file: str) -> None:

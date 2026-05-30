@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from descry.commands.fix import PatchSuggestion, PatchTarget
+from descry.commands.fix import ApplyPatchResult, PatchSuggestion, PatchTarget
 from descry.memory.coworker import DecisionLevel, DecisionRecord, FixQueueItem
 from descry.models import Evidence, Finding, FindingSource, Severity, WorkerType
 from descry.tui.app import Sidebar, SwainAgent, command_suggestions_for
@@ -169,20 +169,23 @@ async def test_scan_auto_drafts_fix_queue_to_patch_files(
             evidence_file=finding.evidence.file,
         )
 
+    def fake_apply(*args, **kwargs) -> ApplyPatchResult:
+        return ApplyPatchResult(applied=True, message="Patch applied.")
+
     monkeypatch.setattr(
         "descry.commands.fix.generate_patch_suggestion",
         fake_generate,
     )
     monkeypatch.setattr("descry.commands.fix.resolve_patch_target", fake_resolve)
+    monkeypatch.setattr("descry.commands.fix.apply_patch_draft", fake_apply)
 
     await agent._draft_fix_queue([item])
 
     patch_path = tmp_path / ".swain" / "fixes" / f"{finding.id[:8]}.patch"
     assert patch_path.exists()
     assert "diff --git" in patch_path.read_text()
-    assert any("checking 1/1" in event for event in app.events)
     assert any("asking codex 1/1" in event for event in app.events)
-    assert any("saved .swain/fixes" in line for line in app.log.lines)
+    assert any("applied" in line for line in app.log.lines)
 
 
 class _FakeLog:

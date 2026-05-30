@@ -54,7 +54,7 @@ def test_scan_next_step_says_fix_queue_is_automatic() -> None:
 
     text = AgentVoice().scan_next_step([finding], 0)
 
-    assert "drafting patch files" in text
+    assert "applying patches" in text
     assert "/fix" not in text
 
 

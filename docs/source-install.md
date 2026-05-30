@@ -137,8 +137,8 @@ codex CLI not found
 ```
 
 Install and authenticate Codex before using `swain fix <id>` or the TUI's
-automatic patch drafting after `/scan`. Scan demos can still run with `--mock`,
-and real scans can use Claude if available.
+automatic patching after `/scan`. Scan demos can still run with `--mock`, and
+real scans can use Claude if available.
 
 Missing ImageMagick:
 

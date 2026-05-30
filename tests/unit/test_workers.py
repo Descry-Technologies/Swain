@@ -153,6 +153,31 @@ def test_parse_output_normalizes_common_issue_shape() -> None:
     assert finding.remediation.summary == "Require the current user dependency."
 
 
+def test_parse_output_extracts_location_file_when_file_field_missing() -> None:
+    worker = DummyWorker()
+    output = """
+{
+  "findings": [
+    {
+      "rule": "sast.auth.python",
+      "severity": "high",
+      "confidence": 0.8,
+      "title": "Missing authorization check",
+      "location": "backend/app/api/tenants.py:42",
+      "fix": "Require the current user dependency."
+    }
+  ]
+}
+"""
+
+    result = worker._parse_output("task-1", output, "", 0, "sast.auth.python", 1)
+
+    assert result.report is not None
+    finding = result.report.findings[0]
+    assert finding.evidence.file == "backend/app/api/tenants.py"
+    assert finding.evidence.line_start == 42
+
+
 def test_parse_output_replaces_worker_supplied_finding_ids() -> None:
     worker = DummyWorker()
     output = """

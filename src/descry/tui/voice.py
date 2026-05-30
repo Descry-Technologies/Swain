@@ -312,7 +312,7 @@ class AgentVoice:
                 "move the value into env or your secret manager."
             )
         if findings:
-            return "I'm drafting patch files for the queue now."
+            return "I'm fixing the queue now and applying patches that pass cleanly."
         return (
             "Next useful move: run me again before shipping or after touching "
             "auth, billing, uploads, or data access."

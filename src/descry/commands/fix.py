@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,13 @@ class PatchTarget:
     finding: dict[str, Any] | None = None
     files: tuple[Path, ...] = ()
     evidence_file: str = ""
+
+
+@dataclass(frozen=True)
+class ApplyPatchResult:
+    applied: bool
+    message: str
+    exit_code: int = 0
 
 
 async def run_fix(repo_root: Path, finding_id: str) -> None:
@@ -149,13 +157,15 @@ def resolve_patch_target(repo_root: Path, finding_id: str) -> PatchTarget:
             ),
         )
     evidence_file = str(evidence.get("file") or "").strip()
-    if not evidence_file:
+    if _is_unknown_file(evidence_file):
         return PatchTarget(
             ok=False,
             finding=finding,
             message=(
-                f"Couldn't draft `{label}`: the finding doesn't name a source "
-                "file. I did not call Codex. Run `/scan` to refresh it."
+                f"Couldn't draft `{label}`: the scan finding didn't name a "
+                "real source file. I did not call Codex. Run `/scan` again to "
+                "refresh the queue; if this repeats, open `/scan details` "
+                "because the worker output is missing file evidence."
             ),
         )
 
@@ -191,6 +201,26 @@ def write_patch_draft(repo_root: Path, finding_id: str, diff: str) -> Path:
     return patch_path
 
 
+def apply_patch_draft(repo_root: Path, patch_path: Path) -> ApplyPatchResult:
+    """Apply a saved patch only if git says it applies cleanly."""
+    check = _run_git_apply(repo_root, patch_path, check_only=True)
+    if check.returncode != 0:
+        return ApplyPatchResult(
+            applied=False,
+            message=_git_apply_message(check, "Patch did not apply cleanly."),
+            exit_code=check.returncode,
+        )
+
+    apply = _run_git_apply(repo_root, patch_path, check_only=False)
+    if apply.returncode != 0:
+        return ApplyPatchResult(
+            applied=False,
+            message=_git_apply_message(apply, "Patch apply failed."),
+            exit_code=apply.returncode,
+        )
+    return ApplyPatchResult(applied=True, message="Patch applied.")
+
+
 def _resolve_existing_file(repo_root: Path, evidence_file: str) -> Path | None:
     root = repo_root.resolve()
     candidates = [evidence_file]
@@ -210,11 +240,42 @@ def _resolve_existing_file(repo_root: Path, evidence_file: str) -> Path | None:
     return None
 
 
+def _is_unknown_file(value: str) -> bool:
+    return value.strip().lower() in {"", "unknown", "n/a", "none", "null"}
+
+
 def _display_file(repo_root: Path, file: Path) -> str:
     try:
         return file.relative_to(repo_root.resolve()).as_posix()
     except ValueError:
         return str(file)
+
+
+def _run_git_apply(
+    repo_root: Path,
+    patch_path: Path,
+    *,
+    check_only: bool,
+) -> subprocess.CompletedProcess[str]:
+    cmd = ["git", "apply"]
+    if check_only:
+        cmd.append("--check")
+    cmd.append(str(patch_path))
+    return subprocess.run(  # noqa: S603,S607 - fixed git command.
+        cmd,
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+
+def _git_apply_message(
+    result: subprocess.CompletedProcess[str],
+    fallback: str,
+) -> str:
+    detail = (result.stderr or result.stdout or "").strip().splitlines()
+    return f"{fallback} {detail[0]}" if detail else fallback
 
 
 def _build_prompt(finding: dict[str, Any]) -> str:

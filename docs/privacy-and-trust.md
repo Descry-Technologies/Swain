@@ -100,25 +100,25 @@ scanning.
 
 Workers receive isolated copies of selected files so analysis can be scoped and
 so scan tasks do not write back to the target repo. This reduces accidental
-mutation during review. In the interactive TUI, `/scan` may save review-only
-patch drafts under `.swain/fixes/` after findings are queued, but those drafts
-are not applied to source files.
+mutation during analysis. In the interactive TUI, `/scan` asks Codex for patches
+after findings are queued and applies only patches that pass `git apply --check`.
+Patches that do not apply cleanly are saved under `.swain/fixes/` for review.
 
 ## What `/fix` Does
 
 `swain fix <finding-id>` looks up the finding in local history, selects the
 relevant file, and asks Codex for a minimal unified diff. The TUI also uses this
-same review-only drafting path automatically after `/scan`.
+same patching path automatically after `/scan`.
 
 It does:
 
-- produce a patch draft for review
+- produce a focused patch
 - keep the prompt focused on one finding
 - print the diff to the terminal or save it under `.swain/fixes/`
+- apply clean patches in the interactive TUI
 
 It does not:
 
-- apply the patch automatically
 - commit changes
 - guarantee the fix is complete
 - replace code review, tests, or a professional security audit

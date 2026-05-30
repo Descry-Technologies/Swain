@@ -61,8 +61,10 @@ not a replacement for semgrep, snyk, or a professional audit. a human, fix-first
 ## fix first
 
 in the interactive tui, `/scan` is the main path: swain scans the repo, builds
-the ordered fix queue, then automatically saves review-only patch drafts under
-`.swain/fixes/` for queued findings. `/fix <id>` is only a targeted redraft.
+the ordered fix queue, asks codex for patches, applies the ones that pass
+`git apply --check`, then re-scans once to verify what remains. patches that do
+not apply cleanly are saved under `.swain/fixes/` for review. `/fix <id>` is only
+a targeted redraft.
 
 `swain status` summarizes the latest scan history and surfaces the first issue to fix:
 
@@ -72,8 +74,7 @@ fix first: `bee77255` — checkout trusts client-supplied price and tenant metad
   wrong? swain feedback bee77255 fp --path examples/launchpad-saas
 ```
 
-patch drafts do not silently apply code changes. `swain feedback <id> fp`
-teaches swain when a finding is a false positive.
+`swain feedback <id> fp` teaches swain when a finding is a false positive.
 
 ## launch card
 

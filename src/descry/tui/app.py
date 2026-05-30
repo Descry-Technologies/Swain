@@ -133,6 +133,7 @@ class PatchDraftStatus:
     ok: bool
     message: str
     path: Path | None = None
+    applied: bool = False
 
 
 class Sidebar(Vertical):
@@ -549,6 +550,7 @@ Respond with ONLY one of these JSON objects:
         *,
         objective: str = "manual scan",
         launch_focus: bool = False,
+        fix_depth: int = 0,
     ) -> None:
         if not self._profile:
             await self._say("No profile here yet — let me initialize first.")
@@ -586,10 +588,18 @@ Respond with ONLY one of these JSON objects:
         self._last_findings = result.findings
 
         await self._stream(self._scan_overview(result))
-        await self._draft_fix_queue(result.fix_queue)
+        fix_statuses = await self._draft_fix_queue(result.fix_queue)
 
         self._load_memory()
         self._refresh_sidebar()
+
+        if fix_depth < 1 and any(status.applied for status in fix_statuses):
+            await self._say("Re-scanning after applied fixes.")
+            await self._do_scan(
+                objective="verify applied fixes",
+                launch_focus=launch_focus,
+                fix_depth=fix_depth + 1,
+            )
 
     async def _do_scan_details(self, focus: str = "") -> None:
         if not self._last_scan_events:
@@ -681,53 +691,76 @@ Respond with ONLY one of these JSON objects:
             f"`{self._display_path(patch_path)}`"
         )
 
-    async def _draft_fix_queue(self, fix_queue: list[FixQueueItem]) -> None:
+    async def _draft_fix_queue(
+        self,
+        fix_queue: list[FixQueueItem],
+    ) -> list[PatchDraftStatus]:
         if not fix_queue:
-            return
+            return []
 
         total = len(fix_queue)
         await self._say(
-            f"Drafting {total} fix{'es' if total != 1 else ''}. "
-            "I'll save patch files and leave source untouched."
+            f"Fixing {total} finding{'s' if total != 1 else ''}. "
+            "I'll apply patches that pass git's clean-apply check."
         )
 
         from descry.commands.fix import (
+            apply_patch_draft,
             generate_patch_suggestion,
             resolve_patch_target,
             write_patch_draft,
         )
 
         statuses: list[PatchDraftStatus] = []
-        for index, item in enumerate(fix_queue, start=1):
-            short_id = item.finding_id[:8]
-            title = self._short_title(item.title)
+        targets = []
+        skipped: list[PatchDraftStatus] = []
+        for item in fix_queue:
+            try:
+                target = resolve_patch_target(self.repo_path, item.finding_id)
+            except Exception as e:
+                target = None
+                message = f"couldn't check target: {e}"
+            else:
+                message = target.message
+            if target and target.ok:
+                targets.append((item, target))
+            else:
+                skipped.append(
+                    PatchDraftStatus(
+                        finding_id=item.finding_id,
+                        title=item.title,
+                        ok=False,
+                        message=message,
+                    )
+                )
+
+        if skipped:
             self._fix_progress(
-                event=f"fixes: checking {index}/{total} {short_id}",
+                event=f"fixes: skipped {len(skipped)} unpatchable",
+                line=(
+                    f"[#f0b429]skip[/] {len(skipped)} finding"
+                    f"{'s' if len(skipped) != 1 else ''} need fresh scan evidence"
+                ),
+            )
+            statuses.extend(skipped)
+
+        for index, (item, target) in enumerate(targets, start=1):
+            short_id = item.finding_id[:8]
+            self._fix_progress(
+                event=f"fixes: asking codex {index}/{len(targets)} {short_id}",
                 line=(
                     f"[#00d4aa]fix[/] {index}/{total} "
-                    f"[#888888]{escape(short_id)}[/] checking {escape(title)}"
+                    f"[#888888]{escape(short_id)}[/] asking Codex"
                 ),
             )
             try:
-                target = resolve_patch_target(self.repo_path, item.finding_id)
-                if not target.ok:
-                    suggestion = None
-                    message = target.message
-                else:
-                    self._fix_progress(
-                        event=f"fixes: asking codex {index}/{total} {short_id}",
-                        line=(
-                            f"[#00d4aa]fix[/] {index}/{total} "
-                            f"[#888888]{escape(short_id)}[/] asking Codex"
-                        ),
-                    )
-                    suggestion = await generate_patch_suggestion(
-                        self.repo_path,
-                        item.finding_id,
-                        show_status=False,
-                        target=target,
-                    )
-                    message = suggestion.message
+                suggestion = await generate_patch_suggestion(
+                    self.repo_path,
+                    item.finding_id,
+                    show_status=False,
+                    target=target,
+                )
+                message = suggestion.message
             except Exception as e:
                 suggestion = None
                 message = f"couldn't draft: {e}"
@@ -738,23 +771,34 @@ Respond with ONLY one of these JSON objects:
                     item.finding_id,
                     suggestion.diff,
                 )
+                apply_result = apply_patch_draft(self.repo_path, patch_path)
                 statuses.append(
                     PatchDraftStatus(
                         finding_id=item.finding_id,
                         title=item.title,
-                        ok=True,
-                        message="drafted",
+                        ok=apply_result.applied,
+                        message=apply_result.message,
                         path=patch_path,
+                        applied=apply_result.applied,
                     )
                 )
-                self._fix_progress(
-                    event=f"fixes: drafted {index}/{total} {short_id}",
-                    line=(
-                        f"[#2fdd92]done[/] {index}/{total} "
-                        f"[#888888]{escape(short_id)}[/] saved "
-                        f"{escape(self._display_path(patch_path))}"
-                    ),
-                )
+                if apply_result.applied:
+                    self._fix_progress(
+                        event=f"fixes: applied {index}/{len(targets)} {short_id}",
+                        line=(
+                            f"[#2fdd92]done[/] {index}/{total} "
+                            f"[#888888]{escape(short_id)}[/] applied"
+                        ),
+                    )
+                else:
+                    self._fix_progress(
+                        event=f"fixes: saved {index}/{len(targets)} {short_id}",
+                        line=(
+                            f"[#f0b429]warn[/] {index}/{total} "
+                            f"[#888888]{escape(short_id)}[/] saved patch, "
+                            "not applied"
+                        ),
+                    )
                 continue
 
             statuses.append(
@@ -777,6 +821,7 @@ Respond with ONLY one of these JSON objects:
                 break
 
         await self._stream(self._fix_draft_summary(statuses, total))
+        return statuses
 
     def _fix_progress(self, *, event: str, line: str) -> None:
         self._last_scan_events.append(event)
@@ -789,30 +834,42 @@ Respond with ONLY one of these JSON objects:
         statuses: list[PatchDraftStatus],
         total: int,
     ) -> str:
-        drafted = [status for status in statuses if status.ok and status.path]
+        applied = [status for status in statuses if status.applied]
+        saved = [
+            status for status in statuses
+            if status.path and not status.applied
+        ]
         failed = [status for status in statuses if not status.ok]
 
         lines: list[str] = []
-        if drafted:
+        if applied:
             lines.append(
-                f"Drafted {len(drafted)}/{total} patch "
-                f"file{'s' if len(drafted) != 1 else ''}."
+                f"Applied {len(applied)}/{total} fix"
+                f"{'es' if len(applied) != 1 else ''}."
             )
-            for status in drafted[:5]:
+            for status in applied[:5]:
                 if status.path is None:
                     continue
                 lines.append(
                     f"- `{status.finding_id[:8]}` {self._short_title(status.title)} "
-                    f"-> `{self._display_path(status.path)}`"
+                    f"({self._display_path(status.path)})"
                 )
-            if len(drafted) > 5:
-                lines.append(f"- {len(drafted) - 5} more patch file(s)")
+            if len(applied) > 5:
+                lines.append(f"- {len(applied) - 5} more applied fix(es)")
+
+        if saved:
+            if lines:
+                lines.append("")
+            lines.append(
+                f"Saved {len(saved)} patch "
+                f"file{'s' if len(saved) != 1 else ''} that did not apply cleanly."
+            )
 
         if failed:
             if lines:
                 lines.append("")
             lines.append(
-                f"Couldn't draft {len(failed)} "
+                f"Skipped {len(failed)} "
                 f"finding{'s' if len(failed) != 1 else ''}:"
             )
             for status in failed[:3]:
@@ -827,8 +884,9 @@ Respond with ONLY one of these JSON objects:
 
         if not lines:
             return "No patch drafts were created."
-        lines.append("")
-        lines.append("Review the patches before applying them.")
+        if applied:
+            lines.append("")
+            lines.append("Run /scan again to verify what remains.")
         return "\n".join(lines)
 
     async def _do_launch_card(self) -> None:
