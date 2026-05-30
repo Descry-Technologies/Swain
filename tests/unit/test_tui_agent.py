@@ -6,7 +6,12 @@ import pytest
 from descry.commands.fix import ApplyPatchResult, PatchSuggestion, PatchTarget
 from descry.memory.coworker import DecisionLevel, DecisionRecord, FixQueueItem
 from descry.models import Evidence, Finding, FindingSource, Severity, WorkerType
-from descry.tui.app import Sidebar, SwainAgent, command_suggestions_for
+from descry.tui.app import (
+    PatchDraftStatus,
+    Sidebar,
+    SwainAgent,
+    command_suggestions_for,
+)
 from descry.tui.voice import AgentVoice
 
 
@@ -127,6 +132,90 @@ def test_scan_overview_is_compact_and_points_to_auto_drafting() -> None:
     assert "Fix queue" in overview
     assert f"`{finding.id[:8]}`" in overview
     assert "/scan details" in overview
+
+
+def test_final_verdict_ready_after_clean_verification() -> None:
+    agent = _agent()
+    result = SimpleNamespace(
+        findings=[],
+        secret_hits=[],
+        warnings=[],
+    )
+    status = PatchDraftStatus(
+        finding_id="fadc886b12345678",
+        title="Missing authorization check",
+        ok=True,
+        message="Patch applied.",
+        applied=True,
+    )
+
+    verdict = agent._final_verdict(result, [status])
+
+    assert "VERDICT: READY" in verdict
+    assert "Fixed: 1" in verdict
+    assert "Still open: 0" in verdict
+    assert "git apply --check" in verdict
+    assert "I did not commit anything" in verdict
+
+
+def test_final_verdict_blocks_on_high_remaining_finding() -> None:
+    agent = _agent()
+    finding = _finding()
+    result = SimpleNamespace(
+        findings=[finding],
+        secret_hits=[],
+        warnings=[],
+    )
+
+    verdict = agent._final_verdict(result, [])
+
+    assert "VERDICT: BLOCKED" in verdict
+    assert "Still open: 1" in verdict
+
+
+def test_final_verdict_needs_review_when_latest_fix_is_unverified() -> None:
+    agent = _agent()
+    result = SimpleNamespace(
+        findings=[],
+        secret_hits=[],
+        warnings=[],
+    )
+    status = PatchDraftStatus(
+        finding_id="fadc886b12345678",
+        title="Missing authorization check",
+        ok=True,
+        message="Patch applied.",
+        applied=True,
+    )
+
+    verdict = agent._final_verdict(result, [status], verification_pending=True)
+
+    assert "VERDICT: NEEDS REVIEW" in verdict
+    assert "run /scan again to verify" in verdict
+
+
+def test_fix_summary_groups_unpatchable_findings() -> None:
+    agent = _agent()
+    statuses = [
+        PatchDraftStatus(
+            finding_id="aaaa1111",
+            title="Missing file",
+            ok=False,
+            message="the scan finding didn't name a real source file",
+        ),
+        PatchDraftStatus(
+            finding_id="bbbb2222",
+            title="Missing file",
+            ok=False,
+            message="the scan finding didn't name a real source file",
+        ),
+    ]
+
+    summary = agent._fix_draft_summary(statuses, total=2)
+
+    assert "Skipped 2 findings" in summary
+    assert "- 2 need fresh scan evidence" in summary
+    assert "aaaa1111" not in summary
 
 
 @pytest.mark.asyncio

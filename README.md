@@ -60,11 +60,11 @@ not a replacement for semgrep, snyk, or a professional audit. a human, fix-first
 
 ## fix first
 
-in the interactive tui, `/scan` is the main path: swain scans the repo, builds
-the ordered fix queue, asks codex for patches, applies the ones that pass
-`git apply --check`, then re-scans once to verify what remains. patches that do
-not apply cleanly are saved under `.swain/fixes/` for review. `/fix <id>` is only
-a targeted redraft.
+in the interactive tui, `/scan` is the main path: swain identifies launch risk,
+fixes patchable findings, re-scans once to verify, then gives a final
+`READY` / `BLOCKED` / `NEEDS REVIEW` verdict. it applies only patches that pass
+`git apply --check`; patches that do not apply cleanly are saved under
+`.swain/fixes/` for review. `/fix <id>` is only a targeted redraft.
 
 `swain status` summarizes the latest scan history and surfaces the first issue to fix:
 

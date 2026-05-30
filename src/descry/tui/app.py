@@ -31,7 +31,7 @@ from descry.resources import builtin_playbooks_dir
 from descry.tui.voice import AgentVoice
 
 _COMMANDS = (
-    ("/scan", "scan, queue, and draft fixes"),
+    ("/scan", "identify, fix, verify"),
     ("/scan details", "show the worker trace from the last scan"),
     ("/status", "show mission, watch, decisions, and queue"),
     ("/fix <id>", "redraft one patch"),
@@ -291,8 +291,8 @@ class SwainApp(App):
         yield Static("", id="command-suggestions")
         yield Input(placeholder="Ask Swain anything...", id="message-input")
         yield Static(
-            "[#333333]ctrl+c exit  ·  /scan  ·  /status  ·  "
-            "/scan details  ·  /feedback <id> fp[/]",
+            "[#333333]ctrl+c exit  ·  /scan identify/fix/verify  ·  "
+            "/status  ·  /scan details[/]",
             id="footer",
         )
 
@@ -551,6 +551,7 @@ Respond with ONLY one of these JSON objects:
         objective: str = "manual scan",
         launch_focus: bool = False,
         fix_depth: int = 0,
+        prior_fix_statuses: list[PatchDraftStatus] | None = None,
     ) -> None:
         if not self._profile:
             await self._say("No profile here yet — let me initialize first.")
@@ -589,6 +590,7 @@ Respond with ONLY one of these JSON objects:
 
         await self._stream(self._scan_overview(result))
         fix_statuses = await self._draft_fix_queue(result.fix_queue)
+        all_fix_statuses = [*(prior_fix_statuses or []), *fix_statuses]
 
         self._load_memory()
         self._refresh_sidebar()
@@ -599,7 +601,17 @@ Respond with ONLY one of these JSON objects:
                 objective="verify applied fixes",
                 launch_focus=launch_focus,
                 fix_depth=fix_depth + 1,
+                prior_fix_statuses=all_fix_statuses,
             )
+            return
+
+        await self._stream(
+            self._final_verdict(
+                result,
+                all_fix_statuses,
+                verification_pending=any(status.applied for status in fix_statuses),
+            )
+        )
 
     async def _do_scan_details(self, focus: str = "") -> None:
         if not self._last_scan_events:
@@ -872,13 +884,8 @@ Respond with ONLY one of these JSON objects:
                 f"Skipped {len(failed)} "
                 f"finding{'s' if len(failed) != 1 else ''}:"
             )
-            for status in failed[:3]:
-                lines.append(
-                    f"- `{status.finding_id[:8]}` "
-                    f"{self._short_title(status.message, limit=120)}"
-                )
-            if len(failed) > 3:
-                lines.append(f"- {len(failed) - 3} more failure(s)")
+            for label, count in self._fix_failure_groups(failed):
+                lines.append(f"- {count} {label}")
             if len(statuses) < total:
                 lines.append(f"- {total - len(statuses)} not attempted")
 
@@ -887,6 +894,82 @@ Respond with ONLY one of these JSON objects:
         if applied:
             lines.append("")
             lines.append("Run /scan again to verify what remains.")
+        return "\n".join(lines)
+
+    def _fix_failure_groups(
+        self,
+        failed: list[PatchDraftStatus],
+    ) -> list[tuple[str, int]]:
+        groups: dict[str, int] = {}
+        for status in failed:
+            label = self._fix_failure_label(status.message)
+            groups[label] = groups.get(label, 0) + 1
+        return sorted(groups.items(), key=lambda item: (-item[1], item[0]))
+
+    def _fix_failure_label(self, message: str) -> str:
+        lowered = message.lower()
+        if "real source file" in lowered or "doesn't exist" in lowered:
+            return "need fresh scan evidence"
+        if "codex cli not found" in lowered:
+            return "need Codex CLI authentication"
+        if "did not return a patch" in lowered:
+            return "had no usable patch from Codex"
+        if "timed out" in lowered:
+            return "timed out while drafting"
+        if "did not apply cleanly" in lowered or "apply failed" in lowered:
+            return "did not apply cleanly"
+        return "need manual review"
+
+    def _final_verdict(
+        self,
+        result: Any,
+        fix_statuses: list[PatchDraftStatus],
+        *,
+        verification_pending: bool = False,
+    ) -> str:
+        findings = result.findings
+        secret_hits = len(result.secret_hits)
+        warnings = result.warnings
+        applied = sum(1 for status in fix_statuses if status.applied)
+        could_not_fix = sum(1 for status in fix_statuses if not status.applied)
+        open_count = len(findings) + secret_hits
+        has_blocker = secret_hits > 0 or any(
+            finding.severity.value in {"critical", "high"}
+            for finding in findings
+        )
+
+        if (
+            not verification_pending
+            and not warnings
+            and open_count == 0
+            and could_not_fix == 0
+        ):
+            verdict = "READY"
+            next_step = "Next: ship, then run /scan again after risky changes."
+        elif has_blocker:
+            verdict = "BLOCKED"
+            next_step = "Next: review the remaining blockers, then run /scan again."
+        elif verification_pending:
+            verdict = "NEEDS REVIEW"
+            next_step = "Next: run /scan again to verify applied fixes."
+        else:
+            verdict = "NEEDS REVIEW"
+            next_step = "Next: review skipped items or worker warnings, then /scan."
+
+        lines = [
+            f"VERDICT: {verdict}",
+            f"Fixed: {applied}",
+            f"Still open: {open_count}",
+            f"Could not fix: {could_not_fix}",
+        ]
+        if warnings:
+            lines.append(f"Worker warnings: {len(warnings)}")
+        lines.extend([
+            "",
+            "I applied only patches that passed `git apply --check`.",
+            "I did not commit anything.",
+            next_step,
+        ])
         return "\n".join(lines)
 
     async def _do_launch_card(self) -> None:

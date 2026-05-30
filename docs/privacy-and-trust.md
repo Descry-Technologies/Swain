@@ -103,6 +103,8 @@ so scan tasks do not write back to the target repo. This reduces accidental
 mutation during analysis. In the interactive TUI, `/scan` asks Codex for patches
 after findings are queued and applies only patches that pass `git apply --check`.
 Patches that do not apply cleanly are saved under `.swain/fixes/` for review.
+After applying clean patches, Swain runs one verification scan and reports a
+final `READY`, `BLOCKED`, or `NEEDS REVIEW` verdict.
 
 ## What `/fix` Does
 

@@ -434,7 +434,7 @@ class AgentVoice:
     def help_text(self) -> str:
         return (
             "Use me like a security lead sitting next to you:\n"
-            "/scan                 audit the repo and draft fixes\n"
+            "/scan                 identify, fix, verify, verdict\n"
             "/scan details         expand the hidden worker log\n"
             "/status               show what I know and what still needs signal\n"
             "/fix <id>             redraft one focused patch\n"
