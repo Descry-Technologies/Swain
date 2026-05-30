@@ -38,6 +38,7 @@ async def run_scan(
     output: str = "terminal",
     out_file: str | None = None,
     mock: bool = False,
+    fresh: bool = False,
 ) -> None:
     profile_path = repo_root / ".swain" / "profile.yaml"
     if not profile_path.exists():
@@ -54,6 +55,7 @@ async def run_scan(
             objective="manual scan",
             mock=mock,
             persist=not mock,
+            use_cache=not fresh,
             on_event=_terminal_event if output == "terminal" else None,
         )
     except LeadOrchestrationError as exc:

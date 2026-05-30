@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +43,15 @@ class ApplyPatchResult:
     applied: bool
     message: str
     exit_code: int = 0
+
+
+@dataclass(frozen=True)
+class CachedFixAttempt:
+    finding_id: str
+    message: str
+    outcome: str
+    patch_path: Path | None = None
+    updated_at: str = ""
 
 
 async def run_fix(repo_root: Path, finding_id: str) -> None:
@@ -201,6 +212,62 @@ def write_patch_draft(repo_root: Path, finding_id: str, diff: str) -> Path:
     return patch_path
 
 
+def cached_failed_fix_attempt(
+    repo_root: Path,
+    finding_id: str,
+    target: PatchTarget,
+) -> CachedFixAttempt | None:
+    fingerprint = _patch_target_fingerprint(repo_root, finding_id, target)
+    raw = _load_fix_attempts(repo_root).get("attempts", {}).get(fingerprint)
+    if not isinstance(raw, dict) or raw.get("applied"):
+        return None
+    patch = raw.get("patch_path")
+    patch_path = repo_root / patch if isinstance(patch, str) and patch else None
+    return CachedFixAttempt(
+        finding_id=str(raw.get("finding_id") or finding_id),
+        message=str(raw.get("message") or "previous fix attempt failed"),
+        outcome=str(raw.get("outcome") or "failed"),
+        patch_path=patch_path,
+        updated_at=str(raw.get("updated_at") or ""),
+    )
+
+
+def record_fix_attempt(
+    repo_root: Path,
+    finding_id: str,
+    target: PatchTarget,
+    *,
+    applied: bool,
+    message: str,
+    outcome: str,
+    patch_path: Path | None = None,
+) -> None:
+    store = MemoryStore(repo_root)
+    data = _load_fix_attempts(repo_root)
+    attempts = data.setdefault("attempts", {})
+    if not isinstance(attempts, dict):
+        attempts = {}
+        data["attempts"] = attempts
+
+    relative_patch = ""
+    if patch_path is not None:
+        try:
+            relative_patch = patch_path.relative_to(repo_root).as_posix()
+        except ValueError:
+            relative_patch = patch_path.as_posix()
+
+    attempts[_patch_target_fingerprint(repo_root, finding_id, target)] = {
+        "finding_id": finding_id,
+        "applied": applied,
+        "message": message,
+        "outcome": outcome,
+        "patch_path": relative_patch,
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
+    data["updated_at"] = datetime.now(UTC).isoformat()
+    store.write_json(store.fix_attempts_path, data)
+
+
 def apply_patch_draft(repo_root: Path, patch_path: Path) -> ApplyPatchResult:
     """Apply a saved patch only if git says it applies cleanly."""
     check = _run_git_apply(repo_root, patch_path, check_only=True)
@@ -249,6 +316,44 @@ def _display_file(repo_root: Path, file: Path) -> str:
         return file.relative_to(repo_root.resolve()).as_posix()
     except ValueError:
         return str(file)
+
+
+def _load_fix_attempts(repo_root: Path) -> dict[str, Any]:
+    store = MemoryStore(repo_root)
+    return store.read_json(store.fix_attempts_path)
+
+
+def _patch_target_fingerprint(
+    repo_root: Path,
+    finding_id: str,
+    target: PatchTarget,
+) -> str:
+    root = repo_root.resolve()
+    sha = hashlib.sha256()
+    _fingerprint_text(sha, finding_id[:16])
+    _fingerprint_text(sha, target.evidence_file)
+    for file in sorted(target.files, key=lambda path: _display_file(root, path)):
+        _fingerprint_text(sha, _display_file(root, file))
+        _fingerprint_text(sha, _content_hash(file))
+    return sha.hexdigest()
+
+
+def _fingerprint_text(sha: Any, value: str) -> None:
+    sha.update(value.encode())
+    sha.update(b"\0")
+
+
+def _content_hash(path: Path) -> str:
+    if not path.is_file():
+        return "missing"
+    sha = hashlib.sha256()
+    try:
+        with path.open("rb") as f:
+            while chunk := f.read(65536):
+                sha.update(chunk)
+    except OSError:
+        return "unreadable"
+    return sha.hexdigest()
 
 
 def _run_git_apply(

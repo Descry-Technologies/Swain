@@ -12,6 +12,7 @@ from descry.models import (
     Finding,
     FindingSource,
     Severity,
+    WorkerReport,
     WorkerType,
 )
 from descry.orchestrator.lead import LeadOrchestrator, _save_history
@@ -40,6 +41,42 @@ class TimeoutWorker(BaseWorker):
         timeout_s: int | None = None,
     ) -> WorkerResult:
         return WorkerResult(report=None, timed_out=True, exit_code=-1)
+
+
+class CountingWorker(BaseWorker):
+    worker_type = WorkerType.CLAUDE
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls = 0
+
+    def is_available(self) -> bool:
+        return True
+
+    async def _build_command(self, prompt: str, worktree: Path) -> list[str]:
+        return ["echo", "{}"]
+
+    async def run(
+        self,
+        task_id: str,
+        prompt: str,
+        files: list[Path],
+        repo_root: Path,
+        *,
+        playbook_id: str = "",
+        playbook_version: int = 1,
+        timeout_s: int | None = None,
+    ) -> WorkerResult:
+        self.calls += 1
+        return WorkerResult(
+            report=WorkerReport(
+                task_id=task_id,
+                worker=WorkerType.CLAUDE,
+                playbook=playbook_id,
+                playbook_version=playbook_version,
+                findings=[],
+            )
+        )
 
 
 def test_natural_language_maps_to_coworker_actions(tmp_path: Path) -> None:
@@ -143,6 +180,53 @@ async def test_worker_failures_create_warning_decisions(
     assert result.warnings
     assert warning_decisions
     assert any(decision.trusted is False for decision in warning_decisions)
+
+
+@pytest.mark.asyncio
+async def test_recon_reuses_cached_worker_results_for_same_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _init_repo_memory(tmp_path)
+    worker = CountingWorker()
+
+    def fake_pool(config: SwainConfig, *, mock: bool = False) -> WorkerPool:
+        pool = WorkerPool(max_concurrent=1, max_per_type=1)
+        pool.register(worker)
+        return pool
+
+    monkeypatch.setattr("descry.orchestrator.lead.build_worker_pool", fake_pool)
+
+    first = await LeadOrchestrator(tmp_path).run_recon()
+    first_call_count = worker.calls
+    second = await LeadOrchestrator(tmp_path).run_recon()
+
+    assert first_call_count > 0
+    assert worker.calls == first_call_count
+    assert any("reused cached worker result" in event for event in second.worker_events)
+    assert first.findings == second.findings
+
+
+@pytest.mark.asyncio
+async def test_recon_fresh_bypasses_cached_worker_results(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _init_repo_memory(tmp_path)
+    worker = CountingWorker()
+
+    def fake_pool(config: SwainConfig, *, mock: bool = False) -> WorkerPool:
+        pool = WorkerPool(max_concurrent=1, max_per_type=1)
+        pool.register(worker)
+        return pool
+
+    monkeypatch.setattr("descry.orchestrator.lead.build_worker_pool", fake_pool)
+
+    await LeadOrchestrator(tmp_path).run_recon()
+    first_call_count = worker.calls
+    await LeadOrchestrator(tmp_path).run_recon(use_cache=False)
+
+    assert worker.calls == first_call_count * 2
 
 
 def test_conversational_correction_persists_project_preference(

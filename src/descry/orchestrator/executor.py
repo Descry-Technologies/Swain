@@ -19,6 +19,7 @@ from descry.memory.conventions import ConventionStore
 from descry.memory.coworker import CoworkerMemory
 from descry.memory.profile import ProjectProfile
 from descry.memory.store import MemoryStore
+from descry.memory.task_cache import TaskResultCache
 from descry.models import Finding, Mission, Task, WorkerReport
 from descry.orchestrator.pool import WorkerPool
 from descry.playbooks.loader import PlaybookLoader
@@ -37,6 +38,8 @@ class Executor:
         conventions: ConventionStore,
         calibration: CalibrationStore,
         repo_root: Path,
+        task_cache: TaskResultCache | None = None,
+        read_cache: bool = True,
     ) -> None:
         self.pool = pool
         self.loader = loader
@@ -44,6 +47,8 @@ class Executor:
         self.conventions = conventions
         self.calibration = calibration
         self.repo_root = repo_root
+        self.task_cache = task_cache
+        self.read_cache = read_cache
         self.task_warnings: list[str] = []
 
     async def execute(
@@ -142,6 +147,21 @@ class Executor:
     ) -> WorkerResult:
         prompt = self._build_prompt(playbook, task)
         files = [self.repo_root / f for f in task.files]
+        cache_key = None
+        if self.task_cache is not None:
+            cache_key = self.task_cache.key_for(
+                task=task,
+                prompt=prompt,
+                files=files,
+                repo_root=self.repo_root,
+            )
+            if self.read_cache:
+                cached = self.task_cache.read(cache_key)
+                if cached is not None:
+                    if on_event:
+                        on_event(f"{task.playbook_id}: reused cached worker result")
+                    return cached
+
         result = await self.pool.run_task(
             task,
             prompt,
@@ -171,7 +191,33 @@ class Executor:
                 self.repo_root,
                 on_event=on_event,
             )
+        if (
+            self.task_cache is not None
+            and cache_key is not None
+            and self._cacheable_result(result)
+        ):
+            self.task_cache.write(cache_key, result)
         return result
+
+    def _cacheable_result(self, result: WorkerResult) -> bool:
+        if result.report is not None:
+            return True
+        diagnostic = f"{result.parse_error}\n{result.stderr}".lower()
+        if result.exit_code == 127 or "no available" in diagnostic:
+            return False
+        return not any(
+            marker in diagnostic
+            for marker in (
+                "not authenticated",
+                "please authenticate",
+                "log in",
+                "login required",
+                "api key missing",
+                "invalid api key",
+                "quota",
+                "rate limit",
+            )
+        )
 
     def _should_retry_with_reduced_scope(
         self,

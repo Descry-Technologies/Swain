@@ -41,6 +41,7 @@ class MemoryStore:
             self.root / "playbooks" / "active",
             self.local,
             self.local / "history",
+            self.local / "task-cache",
         ]:
             d.mkdir(parents=True, exist_ok=True)
 
@@ -115,6 +116,10 @@ class MemoryStore:
         return self.local / "history"
 
     @property
+    def task_cache_dir(self) -> Path:
+        return self.local / "task-cache"
+
+    @property
     def mission_ledger_path(self) -> Path:
         return self.local / "mission-ledger.json"
 
@@ -125,6 +130,10 @@ class MemoryStore:
     @property
     def fix_queue_path(self) -> Path:
         return self.local / "fix-queue.json"
+
+    @property
+    def fix_attempts_path(self) -> Path:
+        return self.local / "fix-attempts.json"
 
     @property
     def watch_state_path(self) -> Path:

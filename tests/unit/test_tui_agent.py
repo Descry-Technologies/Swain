@@ -277,6 +277,71 @@ async def test_scan_auto_drafts_fix_queue_to_patch_files(
     assert any("applied" in line for line in app.log.lines)
 
 
+@pytest.mark.asyncio
+async def test_scan_auto_fix_skips_previous_clean_apply_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _FakeApp(tmp_path)
+    agent = SwainAgent(app)  # type: ignore[arg-type]
+    finding = _finding()
+    source = tmp_path / finding.evidence.file
+    source.parent.mkdir(parents=True)
+    source.write_text("print('hello')\n")
+    item = FixQueueItem(
+        id=finding.id[:8],
+        finding_id=finding.id,
+        title=finding.title,
+        severity=finding.severity.value,
+        confidence=finding.confidence,
+        exposure="network-exposed",
+        file=finding.evidence.file,
+        line=finding.evidence.line_start,
+        score=90,
+        rationale="high confidence",
+    )
+    generate_calls = 0
+
+    async def fake_generate(*args, **kwargs) -> PatchSuggestion:
+        nonlocal generate_calls
+        generate_calls += 1
+        return PatchSuggestion(
+            ok=True,
+            message="Patch draft ready.",
+            diff="diff --git a/app.py b/app.py\n",
+        )
+
+    def fake_resolve(*args, **kwargs) -> PatchTarget:
+        return PatchTarget(
+            ok=True,
+            message="Ready to ask Codex.",
+            finding=finding.model_dump(mode="json"),
+            files=(source,),
+            evidence_file=finding.evidence.file,
+        )
+
+    def fake_apply(*args, **kwargs) -> ApplyPatchResult:
+        return ApplyPatchResult(
+            applied=False,
+            message="Patch did not apply cleanly.",
+            exit_code=1,
+        )
+
+    monkeypatch.setattr(
+        "descry.commands.fix.generate_patch_suggestion",
+        fake_generate,
+    )
+    monkeypatch.setattr("descry.commands.fix.resolve_patch_target", fake_resolve)
+    monkeypatch.setattr("descry.commands.fix.apply_patch_draft", fake_apply)
+
+    first = await agent._draft_fix_queue([item])
+    second = await agent._draft_fix_queue([item])
+
+    assert generate_calls == 1
+    assert first[0].message == "Patch did not apply cleanly."
+    assert "already tried on unchanged files" in second[0].message
+
+
 class _FakeLog:
     def __init__(self) -> None:
         self.lines: list[str] = []

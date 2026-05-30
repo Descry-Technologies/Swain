@@ -32,6 +32,7 @@ from descry.memory.coworker import (
 from descry.memory.profile import ProjectProfile
 from descry.memory.scheduler import ScheduleStore
 from descry.memory.store import MemoryStore
+from descry.memory.task_cache import TaskResultCache
 from descry.models import Finding, Severity
 from descry.orchestrator.executor import Executor
 from descry.orchestrator.planner import Planner
@@ -151,6 +152,8 @@ class LeadOrchestrator:
         launch_focus: bool = False,
         mock: bool = False,
         persist: bool = True,
+        use_cache: bool = True,
+        focus_files: set[str] | None = None,
         on_event: Callable[[str], None] | None = None,
     ) -> LeadRunResult:
         profile_path = self.repo_root / ".swain" / "profile.yaml"
@@ -266,6 +269,13 @@ class LeadOrchestrator:
             user_dir=store.root / "playbooks",
         )
         mission = Planner(loader, schedule).plan(trigger, inventory)
+        if focus_files:
+            mission = self._focus_mission(mission, focus_files)
+            emit(
+                "verification scope: "
+                f"{len(_normalize_focus_files(focus_files))} changed source "
+                "file(s)"
+            )
         if persist:
             ledger.latest_decision_ids = coworker.load_ledger().latest_decision_ids
         ledger.mission_id = mission.id
@@ -309,6 +319,8 @@ class LeadOrchestrator:
             conventions,
             calibration,
             self.repo_root,
+            task_cache=TaskResultCache(store.task_cache_dir) if persist else None,
+            read_cache=use_cache and not mock,
         )
         findings = await executor.execute(mission, on_event=emit)
         warnings = list(executor.task_warnings)
@@ -394,6 +406,15 @@ class LeadOrchestrator:
             fix_queue=fix_queue,
             worker_events=events,
         )
+
+    def _focus_mission(self, mission: Any, focus_files: set[str]) -> Any:
+        normalized = _normalize_focus_files(focus_files)
+        focused_tasks = []
+        for task in mission.tasks:
+            files = [file for file in task.files if file in normalized]
+            if files:
+                focused_tasks.append(task.model_copy(update={"files": files}))
+        return mission.model_copy(update={"tasks": focused_tasks})
 
     def build_fix_queue(self, findings: list[Finding]) -> list[FixQueueItem]:
         items = [self._queue_item(finding) for finding in findings]
@@ -638,6 +659,10 @@ def _save_history(
     findings_path = store.history_dir / f"{run_id}-findings.json"
     payload = [finding.model_dump(mode="json") for finding in findings]
     findings_path.write_text(json.dumps(payload, indent=2))
+
+
+def _normalize_focus_files(files: set[str]) -> set[str]:
+    return {file.strip().replace("\\", "/") for file in files if file.strip()}
 
 
 def _decision_record(

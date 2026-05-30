@@ -160,6 +160,11 @@ def scan(
         "--mock",
         help="Use mock worker (offline/testing)",
     ),
+    fresh: bool = typer.Option(
+        False,
+        "--fresh",
+        help="Ignore cached worker results and spend fresh worker calls.",
+    ),
 ) -> None:
     """Run a security scan against the repository."""
     from descry.commands.scan import run_scan
@@ -171,6 +176,7 @@ def scan(
             output=output,
             out_file=out_file,
             mock=mock,
+            fresh=fresh,
         )
     )
 

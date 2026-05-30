@@ -134,6 +134,7 @@ class PatchDraftStatus:
     message: str
     path: Path | None = None
     applied: bool = False
+    source_files: tuple[str, ...] = ()
 
 
 class Sidebar(Vertical):
@@ -410,6 +411,8 @@ class SwainAgent:
         # Hard commands — no ambiguity
         if cmd in ("/scan", "scan"):
             await self._do_scan()
+        elif cmd in ("/scan fresh", "scan fresh", "/rescan", "rescan"):
+            await self._do_scan(use_cache=False)
         elif cmd.startswith(("/scan details", "scan details", "/details", "details")):
             await self._do_scan_details(self._scan_detail_focus(text))
         elif cmd.startswith(("/fix ", "fix ")):
@@ -552,6 +555,8 @@ Respond with ONLY one of these JSON objects:
         launch_focus: bool = False,
         fix_depth: int = 0,
         prior_fix_statuses: list[PatchDraftStatus] | None = None,
+        use_cache: bool = True,
+        focus_files: set[str] | None = None,
     ) -> None:
         if not self._profile:
             await self._say("No profile here yet — let me initialize first.")
@@ -572,6 +577,8 @@ Respond with ONLY one of these JSON objects:
                 trigger="manual",
                 objective=objective,
                 launch_focus=launch_focus,
+                use_cache=use_cache,
+                focus_files=focus_files,
                 on_event=self._scan_event,
             )
         except TimeoutError:
@@ -595,13 +602,18 @@ Respond with ONLY one of these JSON objects:
         self._load_memory()
         self._refresh_sidebar()
 
-        if fix_depth < 1 and any(status.applied for status in fix_statuses):
-            await self._say("Re-scanning after applied fixes.")
+        verify_files = self._verification_files(fix_statuses)
+        if fix_depth < 1 and verify_files:
+            await self._say(
+                "Verifying applied fixes against the changed source files. "
+                "Unchanged worker results stay cached."
+            )
             await self._do_scan(
                 objective="verify applied fixes",
                 launch_focus=launch_focus,
                 fix_depth=fix_depth + 1,
                 prior_fix_statuses=all_fix_statuses,
+                focus_files=verify_files,
             )
             return
 
@@ -609,7 +621,9 @@ Respond with ONLY one of these JSON objects:
             self._final_verdict(
                 result,
                 all_fix_statuses,
-                verification_pending=any(status.applied for status in fix_statuses),
+                verification_pending=(
+                    any(status.applied for status in fix_statuses) and not verify_files
+                ),
             )
         )
 
@@ -718,7 +732,9 @@ Respond with ONLY one of these JSON objects:
 
         from descry.commands.fix import (
             apply_patch_draft,
+            cached_failed_fix_attempt,
             generate_patch_suggestion,
+            record_fix_attempt,
             resolve_patch_target,
             write_patch_draft,
         )
@@ -735,6 +751,26 @@ Respond with ONLY one of these JSON objects:
             else:
                 message = target.message
             if target and target.ok:
+                cached_failure = cached_failed_fix_attempt(
+                    self.repo_path,
+                    item.finding_id,
+                    target,
+                )
+                if cached_failure is not None:
+                    skipped.append(
+                        PatchDraftStatus(
+                            finding_id=item.finding_id,
+                            title=item.title,
+                            ok=False,
+                            message=(
+                                "already tried on unchanged files: "
+                                f"{cached_failure.message}"
+                            ),
+                            path=cached_failure.patch_path,
+                            source_files=self._target_source_files(target),
+                        )
+                    )
+                    continue
                 targets.append((item, target))
             else:
                 skipped.append(
@@ -792,7 +828,17 @@ Respond with ONLY one of these JSON objects:
                         message=apply_result.message,
                         path=patch_path,
                         applied=apply_result.applied,
+                        source_files=self._target_source_files(target),
                     )
+                )
+                record_fix_attempt(
+                    self.repo_path,
+                    item.finding_id,
+                    target,
+                    applied=apply_result.applied,
+                    message=apply_result.message,
+                    outcome="applied" if apply_result.applied else "apply_failed",
+                    patch_path=patch_path,
                 )
                 if apply_result.applied:
                     self._fix_progress(
@@ -819,8 +865,27 @@ Respond with ONLY one of these JSON objects:
                     title=item.title,
                     ok=False,
                     message=message,
+                    source_files=self._target_source_files(target),
                 )
             )
+            if suggestion is not None and self._should_remember_fix_failure(message):
+                record_fix_attempt(
+                    self.repo_path,
+                    item.finding_id,
+                    target,
+                    applied=False,
+                    message=message,
+                    outcome="draft_failed",
+                )
+            elif suggestion is None and self._should_remember_fix_failure(message):
+                record_fix_attempt(
+                    self.repo_path,
+                    item.finding_id,
+                    target,
+                    applied=False,
+                    message=message,
+                    outcome="exception",
+                )
             self._fix_progress(
                 event=f"fixes: failed {index}/{total} {short_id}",
                 line=(
@@ -834,6 +899,38 @@ Respond with ONLY one of these JSON objects:
 
         await self._stream(self._fix_draft_summary(statuses, total))
         return statuses
+
+    def _should_remember_fix_failure(self, message: str) -> bool:
+        lowered = message.lower()
+        return not any(
+            marker in lowered
+            for marker in (
+                "codex cli not found",
+                "not authenticated",
+                "please authenticate",
+                "login required",
+                "log in",
+                "api key",
+                "quota",
+                "rate limit",
+            )
+        )
+
+    def _verification_files(self, statuses: list[PatchDraftStatus]) -> set[str]:
+        files: set[str] = set()
+        for status in statuses:
+            if status.applied:
+                files.update(status.source_files)
+        return files
+
+    def _target_source_files(self, target: Any) -> tuple[str, ...]:
+        files: list[str] = []
+        for file in getattr(target, "files", ()):
+            try:
+                files.append(file.relative_to(self.repo_path).as_posix())
+            except ValueError:
+                files.append(str(file))
+        return tuple(files)
 
     def _fix_progress(self, *, event: str, line: str) -> None:
         self._last_scan_events.append(event)
