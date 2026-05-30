@@ -50,7 +50,7 @@ What this proves:
 - `doctor --no-probe-workers` validates setup without spending model quota.
 - `status` shows the demo history fixture and a fix-first
   recommendation.
-- `scan --mock` exercises the scan path without Claude/Codex.
+- `scan --mock` replays bundled launch-risk findings without Claude/Codex.
 
 To open the demo TUI:
 
@@ -179,6 +179,7 @@ uv run swain status examples/launchpad-saas
 uv run swain scan examples/launchpad-saas --output markdown --mock
 uv run pytest -q
 uv run ruff check scripts src tests examples
+uv run mypy src/descry
 ```
 
 ## Fresh Checkout Gate
@@ -195,6 +196,7 @@ uv run swain status examples/launchpad-saas
 uv run swain scan examples/launchpad-saas --output markdown --mock
 uv run pytest -q
 uv run ruff check scripts src tests examples
+uv run mypy src/descry
 ```
 
 For a hosted repository, replace `/path/to/swain` with the GitHub clone URL.

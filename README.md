@@ -38,6 +38,12 @@ offline demo (no quota):
 swain demo
 ```
 
+interactive demo (no quota):
+
+```bash
+swain demo --tui
+```
+
 export a shareable launch verdict:
 
 ```bash
@@ -94,6 +100,9 @@ use [examples/launchpad-saas](examples/launchpad-saas) — an intentionally vuln
 - [scan-flow.gif](docs/assets/demo/scan-flow.gif)
 - [transcript.md](docs/assets/demo/transcript.md)
 
+`swain demo` replays the bundled launch-risk findings without spending model
+quota. `swain demo --tui` opens the same repo in the interactive scan/fix flow.
+
 regenerate assets:
 
 ```bash
@@ -115,9 +124,12 @@ read [docs/privacy-and-trust.md](docs/privacy-and-trust.md) before scanning sens
   conventions.yaml
   playbooks/
   demo-history/
+  fixes/
   .local/
     history/
-    calibration.yaml
+    task-cache/
+    calibration.json
+    fix-attempts.json
 ```
 
 `config.yaml`, `profile.yaml`, `conventions.yaml`, reviewed playbooks, and `demo-history/` can be committed. `.swain/.local/` is local-only and ignored.
@@ -128,6 +140,7 @@ start with [CONTRIBUTING.md](CONTRIBUTING.md), then:
 
 ```bash
 uv run ruff check scripts src tests examples
+uv run mypy src/descry
 uv run pytest -q
 uv build --wheel
 ```
