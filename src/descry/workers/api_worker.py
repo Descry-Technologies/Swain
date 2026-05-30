@@ -217,8 +217,9 @@ def _anthropic_text(data: dict[str, Any]) -> str:
 
 
 def _openai_text(data: dict[str, Any]) -> str:
-    if isinstance(data.get("output_text"), str):
-        return data["output_text"]
+    output_text = data.get("output_text")
+    if isinstance(output_text, str):
+        return output_text
 
     chunks = []
     for item in data.get("output", []):

@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 from descry.memory.store import MemoryStore
 
 
-def lookup_finding(store: MemoryStore, finding_id: str) -> dict | None:
+def lookup_finding(store: MemoryStore, finding_id: str) -> dict[str, Any] | None:
     """Find a finding by full ID or prefix from newest detail history first."""
     prefix = finding_id.strip()
     if not prefix:
@@ -23,7 +24,7 @@ def lookup_finding(store: MemoryStore, finding_id: str) -> dict | None:
     return None
 
 
-def load_latest_findings(store: MemoryStore) -> list[dict]:
+def load_latest_findings(store: MemoryStore) -> list[dict[str, Any]]:
     """Return findings from the newest detail history file."""
     paths = _finding_history_paths(store)
     if not paths:
@@ -31,7 +32,7 @@ def load_latest_findings(store: MemoryStore) -> list[dict]:
     return _read_findings(paths[0])
 
 
-def iter_history_findings(store: MemoryStore) -> Iterator[dict]:
+def iter_history_findings(store: MemoryStore) -> Iterator[dict[str, Any]]:
     paths = _finding_history_paths(store)
     for path in paths:
         yield from _read_findings(path)
@@ -73,7 +74,7 @@ def _history_dirs(store: MemoryStore) -> list[Path]:
     return dirs
 
 
-def _read_findings(path: Path) -> list[dict]:
+def _read_findings(path: Path) -> list[dict[str, Any]]:
     try:
         data = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):

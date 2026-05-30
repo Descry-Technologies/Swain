@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
@@ -168,7 +169,9 @@ async def run_status(repo_root: Path) -> None:
         console.print("\n[bold]Open findings[/bold]: no finding history yet")
 
 
-def _rank_open_findings(findings: list[dict]) -> list[dict]:
+def _rank_open_findings(
+    findings: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     open_findings = [
         finding for finding in findings
         if finding.get("lifecycle", {}).get("status", "open") == "open"
@@ -176,7 +179,7 @@ def _rank_open_findings(findings: list[dict]) -> list[dict]:
     return sorted(open_findings, key=_finding_sort_key)
 
 
-def _finding_sort_key(finding: dict) -> tuple[int, float, str]:
+def _finding_sort_key(finding: dict[str, Any]) -> tuple[int, float, str]:
     return (
         _SEVERITY_RANK.get(_severity(finding), 99),
         -_confidence(finding),
@@ -184,18 +187,18 @@ def _finding_sort_key(finding: dict) -> tuple[int, float, str]:
     )
 
 
-def _severity(finding: dict) -> str:
+def _severity(finding: dict[str, Any]) -> str:
     return str(finding.get("severity") or "info").lower()
 
 
-def _confidence(finding: dict) -> float:
+def _confidence(finding: dict[str, Any]) -> float:
     try:
         return float(finding.get("confidence") or 0)
     except (TypeError, ValueError):
         return 0.0
 
 
-def _severity_style(finding: dict) -> str:
+def _severity_style(finding: dict[str, Any]) -> str:
     return {
         "critical": "bold red",
         "high": "red",
@@ -205,16 +208,16 @@ def _severity_style(finding: dict) -> str:
     }.get(_severity(finding), "white")
 
 
-def _finding_id(finding: dict) -> str:
+def _finding_id(finding: dict[str, Any]) -> str:
     finding_id = str(finding.get("id") or "").strip()
     return finding_id[:8] if finding_id else "unknown"
 
 
-def _title(finding: dict) -> str:
+def _title(finding: dict[str, Any]) -> str:
     return str(finding.get("title") or finding.get("rule") or "Untitled finding")
 
 
-def _location(finding: dict) -> str:
+def _location(finding: dict[str, Any]) -> str:
     evidence = finding.get("evidence", {})
     if not isinstance(evidence, dict):
         return "unknown"

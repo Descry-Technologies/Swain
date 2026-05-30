@@ -77,7 +77,7 @@ class ScheduleStore:
         with self._store.lock():
             self._store.write_yaml(self._store.schedule_path, self._data)
 
-    def get_schedules_for_trigger(self, trigger: str) -> list[dict]:
+    def get_schedules_for_trigger(self, trigger: str) -> list[dict[str, Any]]:
         return [
             s for s in self._data.get("schedules", [])
             if s.get("trigger") == trigger
@@ -88,12 +88,12 @@ class ScheduleStore:
             self._data.get("runs_since_last_recompute", 0) + 1
         )
         self._save()
-        return self._data["runs_since_last_recompute"]
+        return int(self._data["runs_since_last_recompute"])
 
     def needs_recompute(self) -> bool:
-        return self._data.get("runs_since_last_recompute", 0) >= 10
+        return int(self._data.get("runs_since_last_recompute", 0)) >= 10
 
-    def apply_recompute(self, new_schedules: list[dict]) -> None:
+    def apply_recompute(self, new_schedules: list[dict[str, Any]]) -> None:
         self._data["schedules"] = new_schedules
         self._data["runs_since_last_recompute"] = 0
         self._data["generated_at"] = datetime.now(UTC).isoformat()

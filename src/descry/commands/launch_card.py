@@ -7,6 +7,7 @@ import textwrap
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
@@ -175,7 +176,7 @@ def _surfaces(profile: ProjectProfile) -> list[str]:
     ]
 
 
-def _empty_top_issue(raw_findings: list[dict]) -> str:
+def _empty_top_issue(raw_findings: list[dict[str, Any]]) -> str:
     if raw_findings:
         return "No open issue selected"
     return "No scan history yet"
@@ -193,7 +194,7 @@ def _top_issue_meta(item: FixQueueItem | None) -> str:
 def _next_command(
     repo_root: Path,
     item: FixQueueItem | None,
-    raw_findings: list[dict],
+    raw_findings: list[dict[str, Any]],
 ) -> str:
     repo_arg = _display_repo_arg(repo_root)
     if item:

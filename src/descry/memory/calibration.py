@@ -8,6 +8,7 @@ After N>=10 events, re-ranks displayed severity.
 from __future__ import annotations
 
 import json
+from typing import cast
 
 from descry.memory.store import MemoryStore
 
@@ -19,13 +20,14 @@ MIN_EVENTS_TO_USE = 10
 class CalibrationStore:
     def __init__(self, store: MemoryStore) -> None:
         self._store = store
-        self._data: dict[str, dict] = {}
+        self._data: dict[str, dict[str, int]] = {}
         self._load()
 
     def _load(self) -> None:
         path = self._store.calibration_path
         if path.exists():
-            self._data = json.loads(path.read_text())
+            raw = json.loads(path.read_text())
+            self._data = cast(dict[str, dict[str, int]], raw)
 
     def _save(self) -> None:
         with self._store.lock():
@@ -49,13 +51,14 @@ class CalibrationStore:
         total = d["tp"] + d["fp"]
         if total < MIN_EVENTS_TO_USE:
             return None
-        return (PRIOR_ALPHA + d["tp"]) / (PRIOR_ALPHA + PRIOR_BETA + total)
+        return float((PRIOR_ALPHA + d["tp"]) / (PRIOR_ALPHA + PRIOR_BETA + total))
 
     def min_confidence(self) -> float:
         """Global minimum confidence threshold derived from calibration data."""
         all_precisions = [
-            self.precision(r) for r in self._data
-            if self.precision(r) is not None
+            precision
+            for r in self._data
+            if (precision := self.precision(r)) is not None
         ]
         if not all_precisions:
             return 0.5  # default

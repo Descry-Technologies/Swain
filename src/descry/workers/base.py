@@ -11,6 +11,7 @@ import tempfile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 from descry.models import WorkerReport, WorkerType
 
@@ -191,7 +192,7 @@ class BaseWorker(ABC):
                 parse_error=parse_error,
             )
 
-    def _extract_json(self, text: str) -> dict | None:
+    def _extract_json(self, text: str) -> dict[str, Any] | None:
         """Extract a complete worker report JSON object from noisy CLI output."""
         text = text.strip()
         if not text:
@@ -200,7 +201,7 @@ class BaseWorker(ABC):
         try:
             raw = json.loads(text)
             if isinstance(raw, dict):
-                return raw
+                return cast(dict[str, Any], raw)
             if isinstance(raw, list):
                 return {"findings": raw}
         except json.JSONDecodeError:
@@ -216,9 +217,9 @@ class BaseWorker(ABC):
             return candidates[-1]
         return None
 
-    def _json_object_candidates(self, text: str) -> list[dict]:
+    def _json_object_candidates(self, text: str) -> list[dict[str, Any]]:
         decoder = json.JSONDecoder()
-        candidates: list[dict] = []
+        candidates: list[dict[str, Any]] = []
         for index, char in enumerate(text):
             if char not in "{[":
                 continue
@@ -229,12 +230,12 @@ class BaseWorker(ABC):
             except json.JSONDecodeError:
                 continue
             if isinstance(raw, dict):
-                candidates.append(raw)
+                candidates.append(cast(dict[str, Any], raw))
             elif isinstance(raw, list):
                 candidates.append({"findings": raw})
         return candidates
 
-    def _is_report_like(self, raw: dict) -> bool:
+    def _is_report_like(self, raw: dict[str, Any]) -> bool:
         return any(
             isinstance(raw.get(key), list)
             for key in ("findings", "issues", "vulnerabilities", "results")
@@ -244,7 +245,7 @@ class BaseWorker(ABC):
             "evidence",
         }.issubset(raw)
 
-    def _report_candidate_score(self, raw: dict) -> int:
+    def _report_candidate_score(self, raw: dict[str, Any]) -> int:
         score = 0
         if isinstance(raw.get("findings"), list):
             score += 5
@@ -266,11 +267,11 @@ class BaseWorker(ABC):
 
     def _normalize_report(
         self,
-        raw: dict,
+        raw: dict[str, Any],
         task_id: str,
         playbook_id: str,
         playbook_version: int,
-    ) -> dict:
+    ) -> dict[str, Any]:
         if "findings" not in raw and {"rule", "severity", "evidence"}.issubset(raw):
             raw = {"schema_version": "1.0", "findings": [raw]}
 
@@ -306,10 +307,10 @@ class BaseWorker(ABC):
 
     def _normalize_finding(
         self,
-        finding: dict,
+        finding: dict[str, Any],
         report_playbook: str,
         report_version: int,
-    ) -> dict:
+    ) -> dict[str, Any]:
         finding = dict(finding)
         # Worker-provided IDs are often local counters like F001 or verbose rule
         # labels. Swain owns stable IDs so /fix and /feedback stay usable.
@@ -371,7 +372,11 @@ class BaseWorker(ABC):
             parsed = parsed / 100
         return min(max(parsed, 0.0), 1.0)
 
-    def _normalize_title(self, finding: dict, report_playbook: str) -> str:
+    def _normalize_title(
+        self,
+        finding: dict[str, Any],
+        report_playbook: str,
+    ) -> str:
         for key in ("title", "issue", "summary", "message", "name"):
             value = self._normalize_optional_string(finding.get(key))
             if value:
@@ -381,7 +386,7 @@ class BaseWorker(ABC):
             return description[:180]
         return f"Potential {report_playbook or 'security'} finding"
 
-    def _normalize_description(self, finding: dict) -> str:
+    def _normalize_description(self, finding: dict[str, Any]) -> str:
         parts = []
         for key in ("description", "details", "impact", "exploit_scenario"):
             value = self._normalize_optional_string(finding.get(key))
@@ -389,7 +394,7 @@ class BaseWorker(ABC):
                 parts.append(value)
         return "\n\n".join(parts)
 
-    def _normalize_evidence(self, finding: dict) -> dict:
+    def _normalize_evidence(self, finding: dict[str, Any]) -> dict[str, Any]:
         evidence = finding.get("evidence")
         if not isinstance(evidence, dict):
             evidence = {}
@@ -420,8 +425,8 @@ class BaseWorker(ABC):
 
     def _normalize_file_reference(
         self,
-        evidence: dict,
-        finding: dict,
+        evidence: dict[str, Any],
+        finding: dict[str, Any],
     ) -> tuple[str | None, int | None]:
         for container in (evidence, finding):
             for key in (
@@ -444,9 +449,9 @@ class BaseWorker(ABC):
 
     def _parse_file_reference(self, value: object) -> tuple[str | None, int | None]:
         if isinstance(value, dict):
-            path, line = self._normalize_file_reference(value, {})
-            if path:
-                return path, line
+            nested_path, nested_line = self._normalize_file_reference(value, {})
+            if nested_path:
+                return nested_path, nested_line
         text = self._normalize_optional_string(value)
         if not text or text.lower() in {"unknown", "n/a", "none", "null"}:
             return None, None
@@ -469,20 +474,20 @@ class BaseWorker(ABC):
         if value is None:
             return None
         try:
-            parsed = int(value)
+            parsed = value if isinstance(value, int) else int(str(value))
         except (TypeError, ValueError):
             return None
         return parsed if parsed > 0 else None
 
-    def _normalize_remediation(self, value: object) -> dict:
+    def _normalize_remediation(self, value: object) -> dict[str, Any]:
         if isinstance(value, dict):
-            return value
+            return cast(dict[str, Any], value)
         text = self._normalize_optional_string(value)
         return {"summary": text or ""}
 
-    def _normalize_exploitability(self, value: object) -> dict:
+    def _normalize_exploitability(self, value: object) -> dict[str, Any]:
         if isinstance(value, dict):
-            return value
+            return cast(dict[str, Any], value)
         text = self._normalize_optional_string(value)
         return {"assessment": text or ""}
 

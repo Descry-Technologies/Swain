@@ -10,6 +10,7 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -142,7 +143,7 @@ class Executor:
     async def _run_task(
         self,
         task: Task,
-        playbook: dict,
+        playbook: dict[str, Any],
         on_event: Callable[[str], None] | None = None,
     ) -> WorkerResult:
         prompt = self._build_prompt(playbook, task)
@@ -251,7 +252,7 @@ class Executor:
         if on_event:
             on_event(f"warning: {warning}")
 
-    def _build_prompt(self, playbook: dict, task: Task) -> str:
+    def _build_prompt(self, playbook: dict[str, Any], task: Task) -> str:
         context_block = self.profile.to_context_block()
         convention_lines = self.conventions.to_context_lines()
         preference_lines = CoworkerMemory(

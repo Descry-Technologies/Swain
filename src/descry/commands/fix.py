@@ -357,6 +357,9 @@ def _content_hash(path: Path) -> str:
 
 
 def _extract_patch_diff(output: str) -> str:
+    fenced = _extract_fenced_patch(output)
+    if fenced:
+        return fenced
     lines = [
         line.rstrip()
         for line in output.strip().splitlines()
@@ -366,6 +369,37 @@ def _extract_patch_diff(output: str) -> str:
         if line.startswith(("diff --git ", "--- ")):
             return "\n".join(lines[index:]).strip()
     return "\n".join(lines).strip()
+
+
+def _extract_fenced_patch(output: str) -> str:
+    lines = output.strip().splitlines()
+    in_fence = False
+    block: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            if in_fence:
+                patch = _patch_from_lines(block)
+                if patch:
+                    return patch
+                block = []
+                in_fence = False
+                continue
+            in_fence = True
+            block = []
+            continue
+        if in_fence:
+            block.append(line.rstrip())
+    if in_fence:
+        return _patch_from_lines(block)
+    return ""
+
+
+def _patch_from_lines(lines: list[str]) -> str:
+    for index, line in enumerate(lines):
+        if line.startswith(("diff --git ", "--- ")):
+            return "\n".join(lines[index:]).strip()
+    return ""
 
 
 def _run_git_apply(

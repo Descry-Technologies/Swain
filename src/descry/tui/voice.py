@@ -209,7 +209,7 @@ class AgentVoice:
 
         return "\n".join(parts)
 
-    def findings_summary_opinion(self, findings: list) -> str:
+    def findings_summary_opinion(self, findings: list[Finding]) -> str:
         """After listing all findings, give a prioritization opinion."""
         if not findings:
             return ""
@@ -255,7 +255,7 @@ class AgentVoice:
         ]
         return _RANDOM.choice(opts)
 
-    def scan_done(self, findings: list, secret_hits: int) -> str:
+    def scan_done(self, findings: list[Finding], secret_hits: int) -> str:
         if not findings and not secret_hits:
             return _RANDOM.choice(_SCAN_CLEAN)
 
@@ -305,7 +305,7 @@ class AgentVoice:
         )
         return "\n".join(lines)
 
-    def scan_next_step(self, findings: list, secret_hits: int) -> str:
+    def scan_next_step(self, findings: list[Finding], secret_hits: int) -> str:
         if secret_hits:
             return (
                 "Start with the static secret hits. Rotate anything real, then "
@@ -362,7 +362,7 @@ class AgentVoice:
         profile: ProjectProfile,
         convention_count: int,
         schedule_count: int,
-        recent_runs: list[dict],
+        recent_runs: list[dict[str, object]],
     ) -> str:
         stack = ", ".join((profile.frameworks or profile.languages)[:3]) or "unknown"
         lines = []
@@ -398,8 +398,12 @@ class AgentVoice:
 
         if recent_runs:
             last = recent_runs[0]
-            ts = last.get("timestamp", "")[:16].replace("T", " ")
-            count = last.get("finding_count", 0)
+            ts = str(last.get("timestamp", ""))[:16].replace("T", " ")
+            count_value = last.get("finding_count", 0)
+            try:
+                count = int(str(count_value or 0))
+            except ValueError:
+                count = 0
             if count:
                 lines.append(
                     f"Last run: {ts} — "

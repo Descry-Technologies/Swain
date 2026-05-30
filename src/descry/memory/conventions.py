@@ -67,7 +67,7 @@ class ConventionStore:
         self._maybe_promote(key, c)
         self._save()
 
-    def _maybe_promote(self, key: str, candidate: dict) -> None:
+    def _maybe_promote(self, key: str, candidate: dict[str, Any]) -> None:
         severity = candidate.get("severity", "low")
         if severity in ("critical", "high"):
             return  # never auto-promote
@@ -97,7 +97,10 @@ class ConventionStore:
         }
         del self._data["candidates"][key]
 
-    def get_active_conventions(self, rule: str | None = None) -> list[dict]:
+    def get_active_conventions(
+        self,
+        rule: str | None = None,
+    ) -> list[dict[str, Any]]:
         return [
             c for c in self._data["conventions"].values()
             if c.get("active") and (rule is None or c["rule"] == rule)

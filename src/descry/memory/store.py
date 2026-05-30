@@ -53,13 +53,13 @@ class MemoryStore:
     def lock(self) -> FileLock:
         return FileLock(str(self.local / "lock"))
 
-    def read_yaml(self, path: Path) -> dict:
+    def read_yaml(self, path: Path) -> dict[str, Any]:
         if not path.exists():
             return {}
         with path.open() as f:
             return yaml.safe_load(f) or {}
 
-    def write_yaml(self, path: Path, data: dict) -> None:
+    def write_yaml(self, path: Path, data: dict[str, Any]) -> None:
         tmp = path.with_suffix(".tmp")
         with tmp.open("w") as f:
             yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
@@ -79,7 +79,7 @@ class MemoryStore:
         tmp.write_text(json.dumps(data, indent=2, sort_keys=True))
         tmp.replace(path)
 
-    def append_jsonl(self, path: Path, record: dict) -> None:
+    def append_jsonl(self, path: Path, record: dict[str, Any]) -> None:
         with path.open("a") as f:
             f.write(json.dumps(record) + "\n")
 

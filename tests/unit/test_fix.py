@@ -116,6 +116,27 @@ diff --git a/app.py b/app.py
     assert "Here is the fix" not in diff
 
 
+def test_extract_patch_diff_ignores_text_after_fenced_patch() -> None:
+    output = """Patch:
+
+```patch
+diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -1 +1 @@
+-old = True
++old = False
+```
+
+I also recommend adding tests.
+"""
+
+    diff = _extract_patch_diff(output)
+
+    assert diff.startswith("diff --git a/app.py b/app.py")
+    assert "I also recommend" not in diff
+
+
 def _write_finding_history(repo_root: Path, *, finding_id: str, file: str) -> None:
     store = MemoryStore(repo_root)
     finding = {

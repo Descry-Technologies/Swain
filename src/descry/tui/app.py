@@ -16,7 +16,7 @@ import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.markup import escape
 from textual.app import App, ComposeResult
@@ -29,6 +29,12 @@ from descry.memory.coworker import DecisionRecord, FixQueueItem
 from descry.orchestrator.lead import LeadOrchestrationError, LeadOrchestrator
 from descry.resources import builtin_playbooks_dir
 from descry.tui.voice import AgentVoice
+
+if TYPE_CHECKING:
+    from descry.memory.conventions import ConventionStore
+    from descry.memory.profile import ProjectProfile
+    from descry.memory.store import MemoryStore
+    from descry.models import Finding
 
 _COMMANDS = (
     ("/scan", "identify, fix, verify"),
@@ -121,7 +127,7 @@ class ChatLog(RichLog):
 
 @dataclass(frozen=True)
 class ScanRunResult:
-    findings: list
+    findings: list[Finding]
     secret_hits: int
     warnings: list[str]
 
@@ -266,7 +272,7 @@ class Sidebar(Vertical):
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
-class SwainApp(App):
+class SwainApp(App[None]):
     CSS_PATH = Path(__file__).parent / "theme.tcss"
     TITLE = "Swain"
 
@@ -358,12 +364,12 @@ class SwainAgent:
         self.voice = app.voice
         self.repo_path = app.repo_path
         self._lead = LeadOrchestrator(self.repo_path)
-        self._profile = None
-        self._memory = None
-        self._conventions = None
+        self._profile: ProjectProfile | None = None
+        self._memory: MemoryStore | None = None
+        self._conventions: ConventionStore | None = None
         # Session conversation history for context-aware responses
         self._session: list[dict[str, str]] = []
-        self._last_findings: list = []
+        self._last_findings: list[Finding] = []
         self._last_scan_events: list[str] = []
         self._scan_visible_keys: set[str] = set()
 
@@ -394,9 +400,10 @@ class SwainAgent:
                 self._memory = None
                 return
 
-            self._memory = MemoryStore(self.repo_path)
-            self._profile = ProjectProfile.load(self._memory)
-            self._conventions = ConventionStore(self._memory)
+            memory = MemoryStore(self.repo_path)
+            self._memory = memory
+            self._profile = ProjectProfile.load(memory)
+            self._conventions = ConventionStore(memory)
         except Exception:
             self._profile = None
             self._conventions = None
@@ -1120,7 +1127,7 @@ Respond with ONLY one of these JSON objects:
             else 0
         )
         sched = 0
-        runs: list[dict] = []
+        runs: list[dict[str, Any]] = []
         if self._memory:
             try:
                 s = ScheduleStore(self._memory)

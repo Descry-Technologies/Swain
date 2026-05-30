@@ -92,7 +92,11 @@ class Planner:
             },
         )
 
-    def _resolve_files(self, playbook: dict, inventory: RepoInventory) -> list[str]:
+    def _resolve_files(
+        self,
+        playbook: dict[str, Any],
+        inventory: RepoInventory,
+    ) -> list[str]:
         include_globs = playbook.get("files", {}).get("include", ["**"])
         exclude_globs = playbook.get("files", {}).get("exclude", [])
         max_files = playbook.get("files", {}).get("max_files", 50)
@@ -152,7 +156,7 @@ class Planner:
         if source_path is None or not hasattr(source_path, "read_text"):
             return ""
         try:
-            return source_path.read_text(errors="ignore")[:200_000].lower()
+            return str(source_path.read_text(errors="ignore")[:200_000]).lower()
         except OSError:
             return ""
 
@@ -243,7 +247,7 @@ class Planner:
             }
         return common
 
-    def _priority(self, playbook: dict) -> int:
+    def _priority(self, playbook: dict[str, Any]) -> int:
         # Lower = higher priority
         priority_map = {
             "secrets": 1,

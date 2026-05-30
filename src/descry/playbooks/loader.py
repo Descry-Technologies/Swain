@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from jsonschema import ValidationError, validate
+from jsonschema import ValidationError, validate  # type: ignore[import-untyped]
 
 from descry.resources import schema_path
 
@@ -15,9 +15,9 @@ class PlaybookLoader:
     def __init__(self, builtin_dir: Path, user_dir: Path | None = None) -> None:
         self.builtin_dir = builtin_dir
         self.user_dir = user_dir
-        self._schema: dict | None = None
+        self._schema: dict[str, Any] | None = None
 
-    def _load_schema(self) -> dict:
+    def _load_schema(self) -> dict[str, Any]:
         if self._schema is None:
             path = schema_path("playbook.v1.json")
             if path.exists():
@@ -29,7 +29,7 @@ class PlaybookLoader:
         return self._schema
 
     def load_all(self) -> list[dict[str, Any]]:
-        playbooks = []
+        playbooks: list[dict[str, Any]] = []
         dirs = [self.builtin_dir]
         if self.user_dir:
             # User playbooks override built-ins with same ID
@@ -49,12 +49,12 @@ class PlaybookLoader:
                 except Exception as e:
                     print(f"[swain] Warning: could not load playbook {f.name}: {e}")
         # Deduplicate: user playbooks win over built-ins
-        seen: dict[str, dict] = {}
+        seen: dict[str, dict[str, Any]] = {}
         for pb in playbooks:
             seen[pb.get("id", "")] = pb
         return list(seen.values())
 
-    def _validate(self, pb: dict, path: Path) -> None:
+    def _validate(self, pb: dict[str, Any], path: Path) -> None:
         schema = self._load_schema()
         if not schema:
             return
@@ -63,9 +63,13 @@ class PlaybookLoader:
         except ValidationError as e:
             raise ValueError(f"Invalid playbook {path.name}: {e.message}") from e
 
-    def filter_applicable(self, playbooks: list[dict], inventory: Any) -> list[dict]:
+    def filter_applicable(
+        self,
+        playbooks: list[dict[str, Any]],
+        inventory: Any,
+    ) -> list[dict[str, Any]]:
         """Return playbooks that apply to the current repo inventory."""
-        result = []
+        result: list[dict[str, Any]] = []
         for pb in playbooks:
             cond = pb.get("applies_when", {})
             if not cond:

@@ -24,14 +24,17 @@ class PlaybookSynthesizer:
     def __init__(self, generated_dir: Path) -> None:
         self.generated_dir = generated_dir
 
-    def should_synthesize(self, pattern_observations: list[dict]) -> bool:
+    def should_synthesize(
+        self,
+        pattern_observations: list[dict[str, Any]],
+    ) -> bool:
         tps = [o for o in pattern_observations if o.get("confirmed_tp")]
         return len(tps) >= SYNTHESIS_MIN_TPS
 
     def build_synthesis_prompt(
         self,
         pattern: dict[str, Any],
-        examples: list[dict],
+        examples: list[dict[str, Any]],
     ) -> str:
         positive_examples = "\n\n".join(
             f"Example {i + 1} (confirmed finding):\n"
