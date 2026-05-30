@@ -59,7 +59,8 @@ def test_run_tui_restores_terminal_modes_after_crash(
         def __init__(self, repo_path: Path) -> None:
             self.repo_path = repo_path
 
-        def run(self) -> None:
+        def run(self, *, mouse: bool = True) -> None:
+            assert mouse is False
             raise RuntimeError("boom")
 
     monkeypatch.setattr("descry.tui.app.SwainApp", BrokenApp)

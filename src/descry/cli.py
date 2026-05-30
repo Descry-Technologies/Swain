@@ -90,7 +90,7 @@ def _run_tui(repo: Path) -> None:
     from descry.tui.app import SwainApp
 
     try:
-        SwainApp(repo_path=repo).run()
+        SwainApp(repo_path=repo).run(mouse=False)
     finally:
         _restore_terminal_modes()
 
