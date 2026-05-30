@@ -18,6 +18,18 @@ app = typer.Typer(
 )
 daemon_app = typer.Typer(help="Install and control Swain's user daemon.")
 
+_TERMINAL_MODE_RESET = (
+    "\x1b[?9l"
+    "\x1b[?1000l"
+    "\x1b[?1002l"
+    "\x1b[?1003l"
+    "\x1b[?1004l"
+    "\x1b[?1006l"
+    "\x1b[?1015l"
+    "\x1b[?2004l"
+    "\x1b[?25h"
+)
+
 _COMMAND_NAMES = {
     "init",
     "scan",
@@ -56,11 +68,9 @@ def main() -> None:
             and first_arg not in _COMMAND_NAMES
             and Path(first_arg).exists()
         ):
-            from descry.tui.app import SwainApp
-
             repo = _get_repo_root(first_arg)
             _maybe_run_first_launch_setup(repo)
-            SwainApp(repo_path=repo).run()
+            _run_tui(repo)
             return
     app()
 
@@ -70,11 +80,31 @@ def default(ctx: typer.Context) -> None:
     """Open the interactive TUI. Run `swain /path` to pre-load a project."""
     if ctx.invoked_subcommand is not None:
         return
-    from descry.tui.app import SwainApp
 
     repo = _get_repo_root(None)
     _maybe_run_first_launch_setup(repo)
-    SwainApp(repo_path=repo).run()
+    _run_tui(repo)
+
+
+def _run_tui(repo: Path) -> None:
+    from descry.tui.app import SwainApp
+
+    try:
+        SwainApp(repo_path=repo).run()
+    finally:
+        _restore_terminal_modes()
+
+
+def _restore_terminal_modes() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if not stream.isatty():
+                continue
+            stream.write(_TERMINAL_MODE_RESET)
+            stream.flush()
+            return
+        except (AttributeError, OSError, ValueError):
+            continue
 
 
 def _maybe_run_first_launch_setup(repo: Path) -> None:
@@ -414,9 +444,7 @@ def demo(
     if repo is None:
         raise typer.Exit(1)
     if tui:
-        from descry.tui.app import SwainApp
-
-        SwainApp(repo_path=repo).run()
+        _run_tui(repo)
 
 
 @app.command()
