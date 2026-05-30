@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from descry.commands.fix import (
+    _extract_patch_diff,
     apply_patch_draft,
     generate_patch_suggestion,
     resolve_patch_target,
@@ -93,6 +94,26 @@ def test_apply_patch_draft_applies_clean_patch(tmp_path: Path) -> None:
 
     assert result.applied is True
     assert source.read_text() == "old = False\n"
+
+
+def test_extract_patch_diff_removes_markdown_and_leading_text() -> None:
+    output = """Here is the fix:
+
+```diff
+diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -1 +1 @@
+-old = True
++old = False
+```
+"""
+
+    diff = _extract_patch_diff(output)
+
+    assert diff.startswith("diff --git a/app.py b/app.py")
+    assert "```" not in diff
+    assert "Here is the fix" not in diff
 
 
 def _write_finding_history(repo_root: Path, *, finding_id: str, file: str) -> None:

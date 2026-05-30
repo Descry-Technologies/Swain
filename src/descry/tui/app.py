@@ -749,7 +749,7 @@ Respond with ONLY one of these JSON objects:
                 target = None
                 message = f"couldn't check target: {e}"
             else:
-                message = target.message
+                message = target.message if target else "couldn't check target"
             if target and target.ok:
                 cached_failure = cached_failed_fix_attempt(
                     self.repo_path,
@@ -783,11 +783,12 @@ Respond with ONLY one of these JSON objects:
                 )
 
         if skipped:
+            skip_label = self._skipped_fix_label(skipped)
             self._fix_progress(
-                event=f"fixes: skipped {len(skipped)} unpatchable",
+                event=f"fixes: skipped {len(skipped)} {skip_label}",
                 line=(
                     f"[#f0b429]skip[/] {len(skipped)} finding"
-                    f"{'s' if len(skipped) != 1 else ''} need fresh scan evidence"
+                    f"{'s' if len(skipped) != 1 else ''} {skip_label}"
                 ),
             )
             statuses.extend(skipped)
@@ -1005,6 +1006,8 @@ Respond with ONLY one of these JSON objects:
 
     def _fix_failure_label(self, message: str) -> str:
         lowered = message.lower()
+        if "already tried on unchanged files" in lowered:
+            return "already tried on unchanged files"
         if "real source file" in lowered or "doesn't exist" in lowered:
             return "need fresh scan evidence"
         if "codex cli not found" in lowered:
@@ -1016,6 +1019,12 @@ Respond with ONLY one of these JSON objects:
         if "did not apply cleanly" in lowered or "apply failed" in lowered:
             return "did not apply cleanly"
         return "need manual review"
+
+    def _skipped_fix_label(self, skipped: list[PatchDraftStatus]) -> str:
+        groups = self._fix_failure_groups(skipped)
+        if len(groups) == 1:
+            return groups[0][0]
+        return "need review"
 
     def _final_verdict(
         self,

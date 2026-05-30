@@ -132,7 +132,7 @@ async def generate_patch_suggestion(
             exit_code=result.exit_code,
         )
 
-    diff = result.stdout.strip()
+    diff = _extract_patch_diff(result.stdout)
     if not diff:
         return PatchSuggestion(
             ok=False,
@@ -354,6 +354,18 @@ def _content_hash(path: Path) -> str:
     except OSError:
         return "unreadable"
     return sha.hexdigest()
+
+
+def _extract_patch_diff(output: str) -> str:
+    lines = [
+        line.rstrip()
+        for line in output.strip().splitlines()
+        if not line.strip().startswith("```")
+    ]
+    for index, line in enumerate(lines):
+        if line.startswith(("diff --git ", "--- ")):
+            return "\n".join(lines[index:]).strip()
+    return "\n".join(lines).strip()
 
 
 def _run_git_apply(

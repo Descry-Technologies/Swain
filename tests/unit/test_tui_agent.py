@@ -340,6 +340,7 @@ async def test_scan_auto_fix_skips_previous_clean_apply_failure(
     assert generate_calls == 1
     assert first[0].message == "Patch did not apply cleanly."
     assert "already tried on unchanged files" in second[0].message
+    assert any("already tried on unchanged files" in event for event in app.events)
 
 
 class _FakeLog:
