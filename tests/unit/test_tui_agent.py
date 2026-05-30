@@ -1,7 +1,10 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from descry.memory.coworker import DecisionLevel, DecisionRecord
+import pytest
+
+from descry.commands.fix import PatchSuggestion, PatchTarget
+from descry.memory.coworker import DecisionLevel, DecisionRecord, FixQueueItem
 from descry.models import Evidence, Finding, FindingSource, Severity, WorkerType
 from descry.tui.app import Sidebar, SwainAgent, command_suggestions_for
 from descry.tui.voice import AgentVoice
@@ -35,7 +38,7 @@ def test_local_priority_question_works_without_llm() -> None:
     answer = agent._try_local_answer("what should I fix first?")
 
     assert finding.id[:8] in answer
-    assert "/fix" in answer
+    assert "draft patch files automatically" in answer
 
 
 def test_local_launch_question_sets_market_ready_bar() -> None:
@@ -99,7 +102,7 @@ def test_slash_command_suggestions_filter_by_prefix() -> None:
     assert "/scan" not in suggestions
 
 
-def test_scan_overview_consolidates_findings_and_decisions() -> None:
+def test_scan_overview_is_compact_and_points_to_auto_drafting() -> None:
     agent = _agent()
     finding = _finding()
     result = SimpleNamespace(
@@ -119,8 +122,92 @@ def test_scan_overview_consolidates_findings_and_decisions() -> None:
 
     overview = agent._scan_overview(result)
 
-    assert overview.startswith("Scan overview.")
-    assert "Warnings" in overview
-    assert "Decisions" in overview
+    assert overview.startswith("Scan complete.")
+    assert "worker warning" in overview
+    assert "Fix queue" in overview
     assert f"`{finding.id[:8]}`" in overview
-    assert "Use `/scan details`" in overview
+    assert "/scan details" in overview
+
+
+@pytest.mark.asyncio
+async def test_scan_auto_drafts_fix_queue_to_patch_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _FakeApp(tmp_path)
+    agent = SwainAgent(app)  # type: ignore[arg-type]
+    finding = _finding()
+    source = tmp_path / finding.evidence.file
+    source.parent.mkdir(parents=True)
+    source.write_text("print('hello')\n")
+    item = FixQueueItem(
+        id=finding.id[:8],
+        finding_id=finding.id,
+        title=finding.title,
+        severity=finding.severity.value,
+        confidence=finding.confidence,
+        exposure="network-exposed",
+        file=finding.evidence.file,
+        line=finding.evidence.line_start,
+        score=90,
+        rationale="high confidence",
+    )
+
+    async def fake_generate(*args, **kwargs) -> PatchSuggestion:
+        return PatchSuggestion(
+            ok=True,
+            message="Patch draft ready.",
+            diff="diff --git a/app.py b/app.py\n",
+        )
+
+    def fake_resolve(*args, **kwargs) -> PatchTarget:
+        return PatchTarget(
+            ok=True,
+            message="Ready to ask Codex.",
+            finding=finding.model_dump(mode="json"),
+            files=(source,),
+            evidence_file=finding.evidence.file,
+        )
+
+    monkeypatch.setattr(
+        "descry.commands.fix.generate_patch_suggestion",
+        fake_generate,
+    )
+    monkeypatch.setattr("descry.commands.fix.resolve_patch_target", fake_resolve)
+
+    await agent._draft_fix_queue([item])
+
+    patch_path = tmp_path / ".swain" / "fixes" / f"{finding.id[:8]}.patch"
+    assert patch_path.exists()
+    assert "diff --git" in patch_path.read_text()
+    assert any("checking 1/1" in event for event in app.events)
+    assert any("asking codex 1/1" in event for event in app.events)
+    assert any("saved .swain/fixes" in line for line in app.log.lines)
+
+
+class _FakeLog:
+    def __init__(self) -> None:
+        self.lines: list[str] = []
+
+    def agent_label(self) -> None:
+        self.lines.append("Swain")
+
+    def write(self, text: str) -> None:
+        self.lines.append(text)
+
+    def scan_event(self, text: str) -> None:
+        self.lines.append(text)
+
+
+class _FakeApp:
+    def __init__(self, repo_path: Path) -> None:
+        self.voice = AgentVoice()
+        self.repo_path = repo_path
+        self.log = _FakeLog()
+        self.events: list[str] = []
+
+    def query_one(self, *args, **kwargs) -> _FakeLog:
+        return self.log
+
+    def record_scan_event(self, text: str) -> None:
+        self.events.append(text)

@@ -24,6 +24,8 @@ _COMMAND_NAMES = {
     "feedback",
     "fix",
     "launch-card",
+    "share",
+    "badge",
     "status",
     "doctor",
     "demo",
@@ -265,6 +267,13 @@ def fix(
 @app.command()
 def launch_card(
     path: str = typer.Argument(None, help="Repo path"),
+    path_opt: str = typer.Option(
+        None,
+        "--path",
+        "-p",
+        help="Repo path (alternative to positional argument).",
+        hidden=False,
+    ),
     out: str = typer.Option(
         None,
         "--out",
@@ -276,7 +285,7 @@ def launch_card(
     from descry.commands.launch_card import run_launch_card
 
     ok = run_launch_card(
-        _get_repo_root(path),
+        _get_repo_root(path_opt or path),
         out_path=Path(out).resolve() if out else None,
     )
     if not ok:
@@ -438,6 +447,38 @@ def update(
     )
     if not ok:
         raise typer.Exit(1)
+
+
+@app.command()
+def share(
+    path: str = typer.Argument(None, help="Repo path (defaults to current directory)"),
+    path_opt: str = typer.Option(
+        None,
+        "--path",
+        "-p",
+        help="Repo path (alternative to positional argument).",
+    ),
+) -> None:
+    """Generate a launch card and social copy for Twitter and LinkedIn."""
+    from descry.commands.share import run_share
+
+    run_share(_get_repo_root(path_opt or path))
+
+
+@app.command()
+def badge(
+    path: str = typer.Argument(None, help="Repo path (defaults to current directory)"),
+    path_opt: str = typer.Option(
+        None,
+        "--path",
+        "-p",
+        help="Repo path (alternative to positional argument).",
+    ),
+) -> None:
+    """Print a README badge for the current scan verdict."""
+    from descry.commands.badge import run_badge
+
+    run_badge(_get_repo_root(path_opt or path))
 
 
 @app.command()

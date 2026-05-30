@@ -26,6 +26,15 @@ class PatchSuggestion:
     exit_code: int = 0
 
 
+@dataclass(frozen=True)
+class PatchTarget:
+    ok: bool
+    message: str
+    finding: dict[str, Any] | None = None
+    files: tuple[Path, ...] = ()
+    evidence_file: str = ""
+
+
 async def run_fix(repo_root: Path, finding_id: str) -> None:
     suggestion = await generate_patch_suggestion(repo_root, finding_id)
     if not suggestion.ok:
@@ -45,22 +54,20 @@ async def run_fix(repo_root: Path, finding_id: str) -> None:
 async def generate_patch_suggestion(
     repo_root: Path,
     finding_id: str,
+    *,
+    show_status: bool = True,
+    target: PatchTarget | None = None,
 ) -> PatchSuggestion:
+    target = target or resolve_patch_target(repo_root, finding_id)
+    if not target.ok:
+        return PatchSuggestion(
+            ok=False,
+            message=target.message,
+        )
+    finding = target.finding or {}
+    files = list(target.files)
+
     store = MemoryStore(repo_root)
-    finding = lookup_finding(store, finding_id)
-    if not finding:
-        return PatchSuggestion(
-            ok=False,
-            message=f"Finding not found in history: {finding_id}",
-        )
-
-    files = _relevant_files(repo_root, finding)
-    if not files:
-        return PatchSuggestion(
-            ok=False,
-            message="No existing repository file found for this finding.",
-        )
-
     config = SwainConfig.load(store)
     worker = CodexWorker(
         timeout_s=config.cli_task_timeout_s,
@@ -76,10 +83,20 @@ async def generate_patch_suggestion(
         )
 
     finding_label = finding.get("id", finding_id)[:8]
-    console.print(
-        f"[dim]Asking Codex for a patch suggestion for {finding_label}...[/dim]"
-    )
-    result = await worker.run_patch_diff(_build_prompt(finding), files, repo_root)
+    if show_status:
+        from rich.status import Status
+
+        with Status(
+            f"[dim]Asking Codex for a patch suggestion for {finding_label}…[/dim]",
+            console=console,
+        ):
+            result = await worker.run_patch_diff(
+                _build_prompt(finding),
+                files,
+                repo_root,
+            )
+    else:
+        result = await worker.run_patch_diff(_build_prompt(finding), files, repo_root)
     if result.timed_out:
         return PatchSuggestion(
             ok=False,
@@ -106,24 +123,98 @@ async def generate_patch_suggestion(
     return PatchSuggestion(ok=True, message="Patch draft ready.", diff=diff)
 
 
-def _relevant_files(repo_root: Path, finding: dict[str, Any]) -> list[Path]:
+def resolve_patch_target(repo_root: Path, finding_id: str) -> PatchTarget:
+    store = MemoryStore(repo_root)
+    finding = lookup_finding(store, finding_id)
+    label = finding_id.strip()[:8] or finding_id
+    if not finding:
+        return PatchTarget(
+            ok=False,
+            message=(
+                f"Couldn't draft `{label}`: I couldn't find that finding in "
+                "local scan history. I did not call Codex. Run `/scan` to "
+                "refresh the queue."
+            ),
+        )
+
     evidence = finding.get("evidence", {})
     if not isinstance(evidence, dict):
-        return []
-    rel_file = evidence.get("file", "")
-    if not rel_file:
-        return []
+        return PatchTarget(
+            ok=False,
+            finding=finding,
+            message=(
+                f"Couldn't draft `{label}`: the finding has no file evidence, "
+                "so I don't know what to patch. I did not call Codex. Run "
+                "`/scan` to refresh it."
+            ),
+        )
+    evidence_file = str(evidence.get("file") or "").strip()
+    if not evidence_file:
+        return PatchTarget(
+            ok=False,
+            finding=finding,
+            message=(
+                f"Couldn't draft `{label}`: the finding doesn't name a source "
+                "file. I did not call Codex. Run `/scan` to refresh it."
+            ),
+        )
 
+    file = _resolve_existing_file(repo_root, evidence_file)
+    if file is None:
+        return PatchTarget(
+            ok=False,
+            finding=finding,
+            evidence_file=evidence_file,
+            message=(
+                f"Couldn't draft `{label}`: the finding points at "
+                f"`{evidence_file}`, but that file doesn't exist in "
+                f"`{repo_root.name}`. I did not call Codex. Run `/scan` to "
+                "refresh the queue, or open the repo that produced this finding."
+            ),
+        )
+
+    return PatchTarget(
+        ok=True,
+        message=f"Found source file `{_display_file(repo_root, file)}`.",
+        finding=finding,
+        files=(file,),
+        evidence_file=evidence_file,
+    )
+
+
+def write_patch_draft(repo_root: Path, finding_id: str, diff: str) -> Path:
+    """Persist a patch draft under .swain without touching source files."""
+    drafts_dir = repo_root / ".swain" / "fixes"
+    drafts_dir.mkdir(parents=True, exist_ok=True)
+    patch_path = drafts_dir / f"{finding_id[:8]}.patch"
+    patch_path.write_text(diff.rstrip() + "\n")
+    return patch_path
+
+
+def _resolve_existing_file(repo_root: Path, evidence_file: str) -> Path | None:
     root = repo_root.resolve()
-    candidate = (root / rel_file).resolve()
-    try:
-        candidate.relative_to(root)
-    except ValueError:
-        return []
+    candidates = [evidence_file]
+    if ":" in evidence_file:
+        path_part, _, line_part = evidence_file.rpartition(":")
+        if path_part and line_part.isdigit():
+            candidates.append(path_part)
 
-    if not candidate.is_file():
-        return []
-    return [candidate]
+    for rel_file in candidates:
+        candidate = (root / rel_file).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            continue
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _display_file(repo_root: Path, file: Path) -> str:
+    try:
+        return file.relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return str(file)
 
 
 def _build_prompt(finding: dict[str, Any]) -> str:

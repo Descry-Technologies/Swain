@@ -100,18 +100,21 @@ scanning.
 
 Workers receive isolated copies of selected files so analysis can be scoped and
 so scan tasks do not write back to the target repo. This reduces accidental
-mutation during review and keeps `/fix` separate from scanning.
+mutation during review. In the interactive TUI, `/scan` may save review-only
+patch drafts under `.swain/fixes/` after findings are queued, but those drafts
+are not applied to source files.
 
 ## What `/fix` Does
 
 `swain fix <finding-id>` looks up the finding in local history, selects the
-relevant file, and asks Codex for a minimal unified diff.
+relevant file, and asks Codex for a minimal unified diff. The TUI also uses this
+same review-only drafting path automatically after `/scan`.
 
 It does:
 
 - produce a patch draft for review
 - keep the prompt focused on one finding
-- print the diff to the terminal
+- print the diff to the terminal or save it under `.swain/fixes/`
 
 It does not:
 

@@ -214,80 +214,150 @@ def _display_repo_arg(repo_root: Path) -> str:
     return str(relative)
 
 
-def _render_svg(data: LaunchCardData) -> str:
-    project_lines = _wrap(data.project, 48, 2)
-    top_lines = _wrap(data.top_issue_title, 28, 3)
-    top_meta_lines = _wrap(data.top_issue_meta, 42, 2)
-    command_lines = _wrap(data.next_command, 76, 2)
-    subtitle = f"{data.stack} - {data.surfaces}"
-    subtitle_lines = _wrap(subtitle, 58, 2)
+_FONT = "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
 
-    return "\n".join([
-        '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" '
-        'viewBox="0 0 1200 630" role="img" aria-label="Swain launch card">',
+_SEVERITY_COLORS: dict[str, str] = {
+    "CRITICAL": "#ff5a5f",
+    "HIGH": "#f97316",
+    "MEDIUM": "#f0b429",
+    "LOW": "#31c6f7",
+    "INFO": "#9aa4b2",
+}
+
+
+def _render_svg(data: LaunchCardData) -> str:
+    gc = data.verdict_color  # glow color tied to verdict state
+    project_lines = _wrap(data.project, 44, 2)
+    top_lines = _wrap(data.top_issue_title, 30, 3)
+    severity, sev_color = _parse_severity(data.top_issue_meta)
+    location = _parse_location(data.top_issue_meta)
+    sev_w = max(len(severity) * 8 + 22, 48)
+
+    parts: list[str] = [
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"'
+        ' viewBox="0 0 1200 630" role="img" aria-label="Swain launch card">',
         "<defs>",
-        '<linearGradient id="accent" x1="0" x2="1" y1="0" y2="1">',
-        '<stop offset="0" stop-color="#2fdd92"/>',
-        '<stop offset="0.55" stop-color="#31c6f7"/>',
-        '<stop offset="1" stop-color="#f0b429"/>',
+        # Top gradient bar
+        '<linearGradient id="bar" x1="0" x2="1" y1="0" y2="0">',
+        '  <stop offset="0" stop-color="#2fdd92"/>',
+        '  <stop offset="0.5" stop-color="#31c6f7"/>',
+        '  <stop offset="1" stop-color="#f0b429"/>',
         "</linearGradient>",
-        '<filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">',
-        '<feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000" '
-        'flood-opacity="0.35"/>',
+        # Radial verdict-color wash fills left side
+        '<radialGradient id="vg" cx="0" cy="0.52" r="0.7"'
+        ' gradientUnits="objectBoundingBox">',
+        f'  <stop offset="0" stop-color="{gc}" stop-opacity="0.11"/>',
+        '  <stop offset="1" stop-color="#0a0c0f" stop-opacity="0"/>',
+        "</radialGradient>",
+        # Text-glow filter for verdict word
+        '<filter id="glow" x="-40%" y="-40%" width="180%" height="180%">',
+        '  <feGaussianBlur in="SourceAlpha" stdDeviation="10" result="b"/>',
+        f'  <feFlood flood-color="{gc}" flood-opacity="0.5" result="c"/>',
+        '  <feComposite in="c" in2="b" operator="in" result="g"/>',
+        '  <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>',
         "</filter>",
         "</defs>",
-        '<rect width="1200" height="630" fill="#101214"/>',
-        '<rect x="34" y="34" width="1132" height="562" rx="28" fill="#15191d" '
-        'stroke="#263039" filter="url(#shadow)"/>',
-        '<rect x="34" y="34" width="1132" height="10" rx="5" fill="url(#accent)"/>',
-        _text("Swain Launch Check", 72, 86, 24, "#2fdd92", weight=700),
-        _text(data.repo_name, 72, 122, 19, "#9aa4b2"),
-        _text(data.verdict, 72, 202, 72, data.verdict_color, weight=800),
-        _text(data.verdict_summary, 76, 244, 28, "#f3f6f4", weight=650),
-        *_text_block(project_lines, 76, 292, 24, "#cfd8d3", line_height=31),
-        *_text_block(subtitle_lines, 76, 372, 18, "#8f9aa3", line_height=26),
-        _metric_card(
-            748,
-            82,
-            "Open findings",
+
+        # — Background —
+        '<rect width="1200" height="630" fill="#0a0c0f"/>',
+        '<rect width="1200" height="630" fill="url(#vg)"/>',
+        # Top accent bar
+        '<rect x="0" y="0" width="1200" height="4" fill="url(#bar)"/>',
+        # Column separator
+        '<rect x="676" y="28" width="1" height="546" fill="#141c24"/>',
+
+        # — Header —
+        _t("SWAIN", 60, 50, 11, "#2fdd92", weight=800, spacing="3"),
+        _t(data.repo_name, 60, 74, 15, "#3d4f5d"),
+        _t(data.stack, 1140, 50, 13, "#3d4f5d", anchor="end"),
+
+        # — Left: Verdict —
+        _tg(data.verdict, 60, 222, 100, data.verdict_color, weight=900),
+        _t(data.verdict_summary, 60, 268, 21, "#b8c8d4", weight=500),
+        # Project description
+        *[
+            _t(line, 60, 318 + i * 27, 17, "#4e6070")
+            for i, line in enumerate(project_lines)
+        ],
+        # Stack / surfaces footer line
+        _t(f"{data.surfaces}", 60, 410, 13, "#334455"),
+
+        # — Right: Metric cards —
+        *_metric_card(
+            700,
+            38,
+            "open findings",
             str(data.open_findings),
             "#31c6f7",
+            205,
         ),
-        _metric_card(
-            956,
-            82,
-            "Launch blockers",
-            str(data.launch_blockers),
-            data.verdict_color,
+        *_metric_card(935, 38, "launch blockers", str(data.launch_blockers), gc, 205),
+
+        # — Right: Top-finding card —
+        *_finding_card(
+            700,
+            232,
+            440,
+            top_lines,
+            severity,
+            sev_color,
+            sev_w,
+            data.top_issue_id,
+            location,
+            gc,
         ),
-        '<rect x="724" y="226" width="382" height="198" rx="18" '
-        'fill="#101418" stroke="#2c3741"/>',
-        _text("Fix first", 752, 266, 18, "#8f9aa3", weight=650),
-        _text(
-            data.top_issue_id or "none",
-            976,
-            266,
-            18,
-            data.verdict_color,
-            weight=700,
-        ),
-        *_text_block(top_lines, 752, 306, 25, "#f3f6f4", line_height=32),
-        *_text_block(top_meta_lines, 752, 388, 15, "#9aa4b2", line_height=21),
-        '<rect x="72" y="468" width="1034" height="72" rx="18" '
-        'fill="#0f1715" stroke="#28443b"/>',
-        _text("Next", 100, 511, 18, "#2fdd92", weight=700),
-        *_text_block(command_lines, 166, 511, 20, "#f3f6f4", line_height=27),
-        _text(
-            "review-only patch drafts - no source edits are applied",
-            72,
-            574,
-            16,
-            "#7f8a92",
-        ),
-        _text(data.generated_at, 952, 574, 16, "#7f8a92"),
+
+        # — Footer —
+        '<rect x="0" y="572" width="1200" height="58" fill="#060809"/>',
+        '<rect x="0" y="572" width="1200" height="1" fill="#141c24"/>',
+        _t("AI security for vibe coders", 60, 608, 13, "#2fdd92", weight=600),
+        _t("·", 256, 608, 13, "#253040"),
+        _t("swain.sh", 272, 608, 13, "#3d4f5d"),
+        _t(data.generated_at, 1140, 608, 12, "#3d4f5d", anchor="end"),
+
         "</svg>",
         "",
-    ])
+    ]
+    return "\n".join(parts)
+
+
+def _t(
+    text: str,
+    x: int,
+    y: int,
+    size: int,
+    color: str,
+    *,
+    weight: int = 400,
+    anchor: str = "start",
+    spacing: str = "0",
+) -> str:
+    attrs = (
+        f'x="{x}" y="{y}" fill="{color}" font-family="{_FONT}"'
+        f' font-size="{size}" font-weight="{weight}"'
+    )
+    if anchor != "start":
+        attrs += f' text-anchor="{anchor}"'
+    if spacing != "0":
+        attrs += f' letter-spacing="{spacing}"'
+    return f"<text {attrs}>{html.escape(str(text))}</text>"
+
+
+def _tg(
+    text: str,
+    x: int,
+    y: int,
+    size: int,
+    color: str,
+    *,
+    weight: int = 900,
+) -> str:
+    """Text with glow filter applied."""
+    return (
+        f'<text x="{x}" y="{y}" fill="{color}" font-family="{_FONT}"'
+        f' font-size="{size}" font-weight="{weight}" filter="url(#glow)">'
+        f"{html.escape(str(text))}</text>"
+    )
 
 
 def _metric_card(
@@ -296,45 +366,79 @@ def _metric_card(
     label: str,
     value: str,
     color: str,
-) -> str:
-    return "\n".join([
-        f'<rect x="{x}" y="{y}" width="150" height="104" rx="18" '
-        'fill="#101418" stroke="#2c3741"/>',
-        _text(value, x + 26, y + 58, 44, color, weight=800),
-        _text(label, x + 26, y + 86, 15, "#9aa4b2"),
-    ])
+    width: int,
+) -> list[str]:
+    mid = x + width // 2
+    return [
+        f'<rect x="{x}" y="{y}" width="{width}" height="170" rx="14"'
+        ' fill="#0c1018" stroke="#1c2636"/>',
+        _t(value, mid, y + 108, 66, color, weight=800, anchor="middle"),
+        _t(label, mid, y + 144, 13, "#4a6070", anchor="middle"),
+    ]
 
 
-def _text(
-    text: str,
+def _finding_card(
     x: int,
     y: int,
-    size: int,
-    color: str,
-    *,
-    weight: int = 500,
-) -> str:
-    return (
-        f'<text x="{x}" y="{y}" fill="{color}" '
-        'font-family="Inter, ui-sans-serif, system-ui, -apple-system, '
-        f'Segoe UI, sans-serif" font-size="{size}" font-weight="{weight}">'
-        f"{html.escape(text)}</text>"
-    )
+    width: int,
+    title_lines: list[str],
+    severity: str,
+    sev_color: str,
+    sev_w: int,
+    finding_id: str,
+    location: str,
+    verdict_color: str,
+) -> list[str]:
+    if not finding_id:
+        return _clean_scan_card(x, y, width, verdict_color)
+
+    parts: list[str] = [
+        f'<rect x="{x}" y="{y}" width="{width}" height="308" rx="14"'
+        ' fill="#0c1018" stroke="#1c2636"/>',
+        # "Fix first" label + finding id
+        _t("Fix first", x + 20, y + 36, 12, "#3d4f5d", weight=600, spacing="0.5"),
+        _t(f"#{finding_id}", x + width - 20, y + 36, 12, "#3d4f5d", anchor="end"),
+        # Severity badge pill
+        f'<rect x="{x + 20}" y="{y + 50}" width="{sev_w}" height="24" rx="6"'
+        f' fill="{sev_color}22"/>',
+        _t(severity, x + 20 + sev_w // 2, y + 66, 11, sev_color,
+           weight=700, anchor="middle"),
+    ]
+    # Title lines
+    for i, line in enumerate(title_lines[:3]):
+        parts.append(_t(line, x + 20, y + 116 + i * 28, 19, "#dde6ee", weight=500))
+    # Location
+    if location:
+        parts.append(_t(location, x + 20, y + 116 + len(title_lines[:3]) * 28 + 20,
+                        12, "#3d4f5d"))
+    return parts
 
 
-def _text_block(
-    lines: list[str],
+def _clean_scan_card(
     x: int,
     y: int,
-    size: int,
+    width: int,
     color: str,
-    *,
-    line_height: int,
 ) -> list[str]:
     return [
-        _text(line, x, y + index * line_height, size, color)
-        for index, line in enumerate(lines)
+        f'<rect x="{x}" y="{y}" width="{width}" height="308" rx="14"'
+        f' fill="#0c1018" stroke="{color}44"/>',
+        _t("No open findings", x + width // 2, y + 130, 20, color,
+           weight=600, anchor="middle"),
+        _t("Ready to ship.", x + width // 2, y + 162, 15, "#3d4f5d", anchor="middle"),
     ]
+
+
+def _parse_severity(meta: str) -> tuple[str, str]:
+    for sev, col in _SEVERITY_COLORS.items():
+        if meta.upper().startswith(sev):
+            return sev, col
+    return "", "#9aa4b2"
+
+
+def _parse_location(meta: str) -> str:
+    parts = meta.split(" - ")
+    return parts[-1].strip() if len(parts) >= 3 else ""
 
 
 def _wrap(text: str, width: int, max_lines: int) -> list[str]:

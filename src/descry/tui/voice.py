@@ -81,24 +81,22 @@ _SEV_OPENERS = {
 # ── Greeting variants based on context ───────────────────────────────────────
 _GREET_NO_PROJECT = [
     (
-        "Hey. I'm in `{repo}`. I don't know this repo yet, so the first scan "
-        "will build a profile, then audit it. I'll narrate the work as it goes."
+        "Hey. I'm in `{repo}`. Run /scan and I'll profile it, audit it, and "
+        "draft fixes for anything I queue."
     ),
     (
-        "Hey. `{repo}` isn't initialized yet. Run /scan and I'll learn the "
-        "stack before I start calling out risk. Nothing gets fixed behind your back."
+        "Hey. `{repo}` isn't initialized yet. /scan is the main path: learn "
+        "the repo, find launch risk, draft fixes."
     ),
 ]
 
 _GREET_FIRST_TIME = [
     (
-        "Hey. First time with this repo. Run /scan and I'll check the risky "
-        "surfaces first. I'll show the task-level work and keep worker noise "
-        "behind /scan details."
+        "First time here. Run /scan and I'll check the risky surfaces, then "
+        "draft patch files for queued findings."
     ),
     (
-        "Hey. I haven't scanned this one yet. Run /scan and I'll start with "
-        "the parts attackers usually care about."
+        "I haven't scanned this one yet. Run /scan; I'll handle the queue after."
     ),
 ]
 
@@ -109,12 +107,12 @@ _GREET_RETURNING_CLEAN = [
 
 _GREET_RETURNING_FINDINGS = [
     (
-        "Hey. I've got {count} open finding{plural} from the last scan. Want "
-        "to go through them, or run a fresh pass?"
+        "Hey. I've got {count} open finding{plural} from the last scan. Run "
+        "/scan to recheck and draft the queue."
     ),
     (
-        "Hey. Still {count} thing{plural} open from before. Type /scan to "
-        "recheck or /status to review."
+        "Hey. Still {count} thing{plural} open from before. /scan rechecks "
+        "and drafts fixes."
     ),
 ]
 
@@ -248,15 +246,12 @@ class AgentVoice:
 
     def scan_start(self, playbook_count: int) -> str:
         opts = [
-            f"Running {playbook_count} check{'s' if playbook_count != 1 else ''}. "
-            "I'll keep this at task level: scope, work, warnings, and findings.",
+            f"Running {playbook_count} check{'s' if playbook_count != 1 else ''}.",
             (
                 f"On it. {playbook_count} "
-                f"check{'s' if playbook_count != 1 else ''} queued. "
-                "I'll show the useful progress and keep raw worker chatter hidden."
+                f"check{'s' if playbook_count != 1 else ''}, then fixes."
             ),
-            f"Starting {playbook_count} check{'s' if playbook_count != 1 else ''}. "
-            "I'll call out failures instead of letting the scan go quiet.",
+            f"Starting {playbook_count} check{'s' if playbook_count != 1 else ''}.",
         ]
         return _RANDOM.choice(opts)
 
@@ -317,12 +312,7 @@ class AgentVoice:
                 "move the value into env or your secret manager."
             )
         if findings:
-            first = findings[0]
-            return (
-                f"Next: run `/fix {first.id[:8]}` for a patch draft, "
-                "or `/feedback "
-                f"{first.id[:8]} fp` if I'm wrong."
-            )
+            return "I'm drafting patch files for the queue now."
         return (
             "Next useful move: run me again before shipping or after touching "
             "auth, billing, uploads, or data access."
@@ -429,7 +419,7 @@ class AgentVoice:
 
     def unknown_command(self, text: str) -> str:
         opts = [
-            "I didn't catch that. Try /scan, /status, /fix <id>, or /feedback <id> fp.",
+            "I didn't catch that. Try /scan, /status, or /feedback <id> fp.",
             (
                 "I can scan, explain findings, draft fixes, and learn from "
                 "feedback. Try /help."
@@ -444,10 +434,10 @@ class AgentVoice:
     def help_text(self) -> str:
         return (
             "Use me like a security lead sitting next to you:\n"
-            "/scan                 audit the repo and save history\n"
+            "/scan                 audit the repo and draft fixes\n"
             "/scan details         expand the hidden worker log\n"
             "/status               show what I know and what still needs signal\n"
-            "/fix <id>             draft a focused patch for a finding\n"
+            "/fix <id>             redraft one focused patch\n"
             "/feedback <id> fp     teach me a false positive\n"
             "/feedback <id> fix    mark something fixed\n"
             "/watch                show how to enable repo watch\n"

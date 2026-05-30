@@ -41,8 +41,14 @@ async def run_status(repo_root: Path) -> None:
     schedule = ScheduleStore(store)
     lead_status = LeadOrchestrator(repo_root).status_snapshot()
 
+    try:
+        display_path = "~/" + str(repo_root.relative_to(Path.home()))
+    except ValueError:
+        display_path = str(repo_root)
     console.print(
-        Panel.fit("[bold cyan]Swain Status[/bold cyan]", subtitle=str(repo_root))
+        Panel.fit(
+            f"[bold cyan]Swain Status[/bold cyan]\n[dim]{display_path}[/dim]",
+        )
     )
 
     # Profile
@@ -65,7 +71,9 @@ async def run_status(repo_root: Path) -> None:
     schedules = schedule._data.get("schedules", [])
     console.print(f"\n[bold]Active schedule[/bold]: {len(schedules)} playbook(s)")
     for s in schedules[:6]:
-        console.print(f"  • [{s['trigger']}] {s['playbook']}")
+        trigger = s.get("trigger", "")
+        trigger_label = f" [dim]({trigger})[/dim]" if trigger else ""
+        console.print(f"  •  {s['playbook']}{trigger_label}")
 
     # Coworker mission state
     ledger = lead_status.ledger

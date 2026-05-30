@@ -60,8 +60,8 @@ def test_launch_card_turns_history_into_shareable_blocked_verdict(
     assert data.top_issue_id == finding.id[:8]
     assert "Unauthenticated" in svg
     assert "endpoint" in svg
-    assert "swain fix" in svg
-    assert "review-only patch drafts" in svg
+    assert "swain.sh" in svg
+    assert "AI security for vibe coders" in svg
 
 
 def test_launch_card_without_scan_history_prompts_for_scan(tmp_path: Path) -> None:

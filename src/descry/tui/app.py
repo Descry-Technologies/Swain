@@ -25,16 +25,16 @@ from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.widgets import Input, RichLog, Static
 
-from descry.memory.coworker import DecisionRecord
+from descry.memory.coworker import DecisionRecord, FixQueueItem
 from descry.orchestrator.lead import LeadOrchestrationError, LeadOrchestrator
 from descry.resources import builtin_playbooks_dir
 from descry.tui.voice import AgentVoice
 
 _COMMANDS = (
-    ("/scan", "run recon and build the fix queue"),
+    ("/scan", "scan, queue, and draft fixes"),
     ("/scan details", "show the worker trace from the last scan"),
     ("/status", "show mission, watch, decisions, and queue"),
-    ("/fix <id>", "draft a review-only patch"),
+    ("/fix <id>", "redraft one patch"),
     ("/launch-card", "export a shareable launch verdict SVG"),
     ("/feedback <id> fp", "mark a false positive"),
     ("/feedback <id> fix", "mark a finding fixed"),
@@ -126,6 +126,15 @@ class ScanRunResult:
     warnings: list[str]
 
 
+@dataclass(frozen=True)
+class PatchDraftStatus:
+    finding_id: str
+    title: str
+    ok: bool
+    message: str
+    path: Path | None = None
+
+
 class Sidebar(Vertical):
     DEFAULT_CSS = """
     Sidebar {
@@ -198,6 +207,8 @@ class Sidebar(Vertical):
             self.scan_phase = "indexing repo"
         elif text.startswith("worker setup:"):
             self.worker_setup = text.removeprefix("worker setup:").strip()
+        elif text.startswith("fixes:"):
+            self.scan_phase = text.removeprefix("fixes:").strip()
         elif text.startswith("planned ") or text.startswith("mission "):
             self.scan_phase = text
         elif text.startswith("queue:"):
@@ -279,8 +290,8 @@ class SwainApp(App):
         yield Static("", id="command-suggestions")
         yield Input(placeholder="Ask Swain anything...", id="message-input")
         yield Static(
-            "[#333333]ctrl+c exit  ·  /scan  ·  /fix <id>  ·  "
-            "/feedback <id> fp  ·  /status[/]",
+            "[#333333]ctrl+c exit  ·  /scan  ·  /status  ·  "
+            "/scan details  ·  /feedback <id> fp[/]",
             id="footer",
         )
 
@@ -552,9 +563,6 @@ Respond with ONLY one of these JSON objects:
 
         log = self.app.query_one("#chat-log", ChatLog)
         log.system_line(self.voice.thinking())
-        log.system_line(
-            "Showing task overview. Run /scan details to expand the worker log."
-        )
 
         try:
             result = await self._lead.run_recon(
@@ -578,6 +586,7 @@ Respond with ONLY one of these JSON objects:
         self._last_findings = result.findings
 
         await self._stream(self._scan_overview(result))
+        await self._draft_fix_queue(result.fix_queue)
 
         self._load_memory()
         self._refresh_sidebar()
@@ -633,28 +642,194 @@ Respond with ONLY one of these JSON objects:
             finding_id = self._lead.next_fix_id()
         if not finding_id:
             await self._say(
-                "I don't have a queued fix yet. Run /scan first, then ask me "
-                "to draft the first fix."
+                "I don't have a queued fix yet. Run /scan first; I'll draft "
+                "the queue automatically when findings come back."
             )
             return
         await self._say(
-            "Asking Codex for a review-only patch draft for "
+            "Checking finding "
             f"`{finding_id[:8]}`..."
         )
         try:
-            from descry.commands.fix import generate_patch_suggestion
+            from descry.commands.fix import (
+                generate_patch_suggestion,
+                resolve_patch_target,
+                write_patch_draft,
+            )
 
-            suggestion = await generate_patch_suggestion(self.repo_path, finding_id)
+            target = resolve_patch_target(self.repo_path, finding_id)
+            if not target.ok:
+                await self._say(target.message)
+                return
+            await self._say(target.message + " Asking Codex now.")
+
+            suggestion = await generate_patch_suggestion(
+                self.repo_path,
+                finding_id,
+                show_status=False,
+                target=target,
+            )
         except Exception as e:
             await self._say(f"Couldn't draft that fix: {e}")
             return
         if not suggestion.ok:
             await self._say(suggestion.message)
             return
+        patch_path = write_patch_draft(self.repo_path, finding_id, suggestion.diff)
         await self._say(
-            "Patch draft. I did not apply it.\n\n"
-            f"{escape(suggestion.diff)}"
+            "Patch draft saved. I did not apply it.\n\n"
+            f"`{self._display_path(patch_path)}`"
         )
+
+    async def _draft_fix_queue(self, fix_queue: list[FixQueueItem]) -> None:
+        if not fix_queue:
+            return
+
+        total = len(fix_queue)
+        await self._say(
+            f"Drafting {total} fix{'es' if total != 1 else ''}. "
+            "I'll save patch files and leave source untouched."
+        )
+
+        from descry.commands.fix import (
+            generate_patch_suggestion,
+            resolve_patch_target,
+            write_patch_draft,
+        )
+
+        statuses: list[PatchDraftStatus] = []
+        for index, item in enumerate(fix_queue, start=1):
+            short_id = item.finding_id[:8]
+            title = self._short_title(item.title)
+            self._fix_progress(
+                event=f"fixes: checking {index}/{total} {short_id}",
+                line=(
+                    f"[#00d4aa]fix[/] {index}/{total} "
+                    f"[#888888]{escape(short_id)}[/] checking {escape(title)}"
+                ),
+            )
+            try:
+                target = resolve_patch_target(self.repo_path, item.finding_id)
+                if not target.ok:
+                    suggestion = None
+                    message = target.message
+                else:
+                    self._fix_progress(
+                        event=f"fixes: asking codex {index}/{total} {short_id}",
+                        line=(
+                            f"[#00d4aa]fix[/] {index}/{total} "
+                            f"[#888888]{escape(short_id)}[/] asking Codex"
+                        ),
+                    )
+                    suggestion = await generate_patch_suggestion(
+                        self.repo_path,
+                        item.finding_id,
+                        show_status=False,
+                        target=target,
+                    )
+                    message = suggestion.message
+            except Exception as e:
+                suggestion = None
+                message = f"couldn't draft: {e}"
+
+            if suggestion and suggestion.ok:
+                patch_path = write_patch_draft(
+                    self.repo_path,
+                    item.finding_id,
+                    suggestion.diff,
+                )
+                statuses.append(
+                    PatchDraftStatus(
+                        finding_id=item.finding_id,
+                        title=item.title,
+                        ok=True,
+                        message="drafted",
+                        path=patch_path,
+                    )
+                )
+                self._fix_progress(
+                    event=f"fixes: drafted {index}/{total} {short_id}",
+                    line=(
+                        f"[#2fdd92]done[/] {index}/{total} "
+                        f"[#888888]{escape(short_id)}[/] saved "
+                        f"{escape(self._display_path(patch_path))}"
+                    ),
+                )
+                continue
+
+            statuses.append(
+                PatchDraftStatus(
+                    finding_id=item.finding_id,
+                    title=item.title,
+                    ok=False,
+                    message=message,
+                )
+            )
+            self._fix_progress(
+                event=f"fixes: failed {index}/{total} {short_id}",
+                line=(
+                    f"[#f0b429]warn[/] {index}/{total} "
+                    f"[#888888]{escape(short_id)}[/] "
+                    f"{escape(self._short_title(message, limit=90))}"
+                ),
+            )
+            if "codex CLI not found" in message:
+                break
+
+        await self._stream(self._fix_draft_summary(statuses, total))
+
+    def _fix_progress(self, *, event: str, line: str) -> None:
+        self._last_scan_events.append(event)
+        self.app.record_scan_event(event)
+        log = self.app.query_one("#chat-log", ChatLog)
+        log.scan_event(line)
+
+    def _fix_draft_summary(
+        self,
+        statuses: list[PatchDraftStatus],
+        total: int,
+    ) -> str:
+        drafted = [status for status in statuses if status.ok and status.path]
+        failed = [status for status in statuses if not status.ok]
+
+        lines: list[str] = []
+        if drafted:
+            lines.append(
+                f"Drafted {len(drafted)}/{total} patch "
+                f"file{'s' if len(drafted) != 1 else ''}."
+            )
+            for status in drafted[:5]:
+                if status.path is None:
+                    continue
+                lines.append(
+                    f"- `{status.finding_id[:8]}` {self._short_title(status.title)} "
+                    f"-> `{self._display_path(status.path)}`"
+                )
+            if len(drafted) > 5:
+                lines.append(f"- {len(drafted) - 5} more patch file(s)")
+
+        if failed:
+            if lines:
+                lines.append("")
+            lines.append(
+                f"Couldn't draft {len(failed)} "
+                f"finding{'s' if len(failed) != 1 else ''}:"
+            )
+            for status in failed[:3]:
+                lines.append(
+                    f"- `{status.finding_id[:8]}` "
+                    f"{self._short_title(status.message, limit=120)}"
+                )
+            if len(failed) > 3:
+                lines.append(f"- {len(failed) - 3} more failure(s)")
+            if len(statuses) < total:
+                lines.append(f"- {total - len(statuses)} not attempted")
+
+        if not lines:
+            return "No patch drafts were created."
+        lines.append("")
+        lines.append("Review the patches before applying them.")
+        return "\n".join(lines)
 
     async def _do_launch_card(self) -> None:
         try:
@@ -831,18 +1006,14 @@ Respond with ONLY one of these JSON objects:
                 f"{escape(text.removeprefix('worker setup:').strip())}",
             )
         if text.startswith("planned "):
-            return self._once("stage:planned", f"[#777777]plan[/] {escape(text)}")
+            return None
         if text.startswith("queue:"):
             return self._once(
                 "stage:queue",
                 f"[#777777]checks[/] {escape(self._compact_queue(text))}",
             )
         if text.startswith("model workers can spend"):
-            return self._once(
-                "stage:detail-hint",
-                "[#777777]detail[/] worker chatter is hidden; "
-                "/scan details expands it",
-            )
+            return None
         if text.startswith("mission "):
             return None
         if text.startswith("warning:"):
@@ -853,11 +1024,7 @@ Respond with ONLY one of these JSON objects:
             return None
         label = self._playbook_label(playbook)
         if rest.startswith("starting with "):
-            count = rest.removeprefix("starting with ").split(" file", 1)[0]
-            return self._once(
-                f"task:{playbook}:queued",
-                f"[#888888]-[/] {escape(label)} queued ({escape(count)} files)",
-            )
+            return None
         if " reviewing " in rest:
             worker, file_part = rest.split(" reviewing ", 1)
             count = file_part.split(" file", 1)[0]
@@ -869,6 +1036,8 @@ Respond with ONLY one of these JSON objects:
         if " returned " in rest:
             worker, finding_part = rest.split(" returned ", 1)
             count = finding_part.split(" finding", 1)[0]
+            if count == "0":
+                return None
             return (
                 f"[#2fdd92]done[/] {escape(label)}: {escape(worker)} "
                 f"returned {escape(count)} findings"
@@ -952,6 +1121,18 @@ Respond with ONLY one of these JSON objects:
                 return text[len(prefix):].strip()
         return ""
 
+    def _display_path(self, path: Path) -> str:
+        try:
+            return path.relative_to(self.repo_path).as_posix()
+        except ValueError:
+            return str(path)
+
+    def _short_title(self, text: str, *, limit: int = 72) -> str:
+        clean = " ".join(str(text).split())
+        if len(clean) <= limit:
+            return clean
+        return clean[: limit - 1].rstrip() + "…"
+
     def _format_decision_log(self, decisions: list[DecisionRecord]) -> str:
         lines = ["Decision log."]
         for decision in decisions[-6:]:
@@ -966,31 +1147,21 @@ Respond with ONLY one of these JSON objects:
         findings = result.findings
         secret_hits = len(result.secret_hits)
         warnings = result.warnings
-        lines = ["Scan overview."]
-        done = self.voice.scan_done(findings, secret_hits)
-        if done:
-            lines.append(done)
+        fix_queue = getattr(result, "fix_queue", [])
+        lines = ["Scan complete."]
+        summary = self.voice.scan_done(findings, secret_hits)
+        if summary:
+            lines.append(summary)
         if warnings:
-            lines.extend([
-                "",
-                "Warnings",
-                (
-                    "I don't fully trust this scan yet. Some worker calls "
-                    "failed or returned unusable output."
-                ),
-            ])
-            lines.extend(f"- {warning}" for warning in warnings[:4])
-            if len(warnings) > 4:
-                lines.append(f"- {len(warnings) - 4} more warning(s)")
-        if result.decisions:
-            lines.extend(["", "Decisions"])
-            for decision in result.decisions[-5:]:
-                lines.append(f"- {decision.level.value}: {decision.summary}")
-                if decision.next_step:
-                    lines.append(f"  Next: {decision.next_step}")
+            lines.append(
+                f"{len(warnings)} worker warning"
+                f"{'s' if len(warnings) != 1 else ''}; "
+                "use `/scan details` for the trace."
+            )
         if findings:
-            lines.extend(["", f"Findings ({len(findings)})"])
-            for finding in findings[:6]:
+            lines.append("")
+            lines.append(f"Fix queue: {len(fix_queue) or len(findings)}")
+            for finding in findings[:3]:
                 lines.append(
                     "- "
                     f"{finding.severity.value.upper()} `{finding.id[:8]}` "
@@ -998,21 +1169,20 @@ Respond with ONLY one of these JSON objects:
                     f"({finding.evidence.file}:{finding.evidence.line_start or '?'}, "
                     f"{finding.confidence:.0%})"
                 )
-            if len(findings) > 6:
-                lines.append(f"- {len(findings) - 6} more finding(s)")
-            opinion = self.voice.findings_summary_opinion(findings)
-            if opinion:
-                lines.extend(["", opinion])
+            if len(findings) > 3:
+                lines.append(f"- {len(findings) - 3} more finding(s)")
         elif secret_hits:
             lines.extend([
                 "",
                 "Static secret hits need manual review before anything else.",
             ])
-        lines.extend([
-            "",
-            self.voice.scan_next_step(findings, secret_hits),
-            "Use `/scan details` if you want the worker trace.",
-        ])
+        next_step = (
+            ""
+            if fix_queue
+            else self.voice.scan_next_step(findings, secret_hits)
+        )
+        if next_step:
+            lines.extend(["", next_step])
         return "\n".join(line for line in lines if line is not None)
 
     def _status_with_coworker_state(self, base: str) -> str:
@@ -1032,7 +1202,7 @@ Respond with ONLY one of these JSON objects:
         if snapshot.fix_queue:
             first = snapshot.fix_queue[0]
             lines.append(
-                f"Next fix: `{first.finding_id[:8]}` — {first.title}."
+                f"Top queued finding: `{first.finding_id[:8]}` — {first.title}."
             )
         else:
             lines.append("Fix queue is empty.")
@@ -1076,20 +1246,19 @@ Respond with ONLY one of these JSON objects:
         )
         if any(phrase in lowered for phrase in priority_phrases):
             if self._last_findings:
-                return "\n\n".join(
-                    part for part in [
-                        self.voice.findings_summary_opinion(self._last_findings),
-                        self.voice.scan_next_step(self._last_findings, 0),
-                    ] if part
+                opinion = self.voice.findings_summary_opinion(self._last_findings)
+                return (
+                    f"{opinion}\n\n"
+                    "Run /scan again and I'll recheck, rebuild the queue, and "
+                    "draft patch files automatically."
                 )
             return "Run /scan first. I need fresh findings before I can rank anything."
 
         if "launch" in lowered or "ship" in lowered or "market" in lowered:
             return (
                 "Before shipping, I want a clean pass on auth, payments, uploads, "
-                "secrets, and tenant/data access. Run /scan, then fix anything "
-                "critical or high before you trust the launch. I'll be blunt, "
-                "but I'll show my work."
+                "secrets, and tenant/data access. Run /scan and I'll draft fixes "
+                "for anything I queue."
             )
 
         return ""

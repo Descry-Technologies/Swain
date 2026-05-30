@@ -113,7 +113,15 @@ def _render_terminal(
                 console.print(f"  ⚠ {warning}")
             return
         console.print(
-            Panel.fit("[green]✓ No findings[/green]", title="Swain Scan Complete")
+            Panel(
+                "[bold green]✓  Clean scan — no findings, no blockers.[/bold green]\n\n"
+                "  You're cleared to ship.\n\n"
+                "  [dim]Run [bold]swain share[/bold] to generate a launch card "
+                "for social.[/dim]",
+                title="[bold green]Swain[/bold green]",
+                border_style="green",
+                padding=(1, 2),
+            )
         )
         return
 

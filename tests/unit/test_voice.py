@@ -49,13 +49,13 @@ def test_finding_narrative_includes_actionable_finding_id() -> None:
     assert "ID:" in text
 
 
-def test_scan_next_step_points_to_fix_or_feedback() -> None:
+def test_scan_next_step_says_fix_queue_is_automatic() -> None:
     finding = _finding()
 
     text = AgentVoice().scan_next_step([finding], 0)
 
-    assert f"/fix {finding.id[:8]}" in text
-    assert f"/feedback {finding.id[:8]} fp" in text
+    assert "drafting patch files" in text
+    assert "/fix" not in text
 
 
 def test_scan_incomplete_does_not_claim_clean() -> None:
